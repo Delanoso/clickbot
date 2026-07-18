@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node src/index.js",
     "allocate": "node src/index.js allocate-drivers",
+    "explore": "node src/explore.js",
     "demo:server": "node demo/server.js",
     "demo": "node scripts/run-demo.mjs",
     "test": "node src/utils/driverName.test.js",

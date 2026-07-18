@@ -1,5 +1,8 @@
+import { loadEnvFile } from "./loadEnv.js";
 import { loadConfig } from "./config.js";
 import { runAllocateDrivers } from "./tasks/allocateDrivers.js";
+
+loadEnvFile();
 
 function parseArgs(argv) {
   const args = { task: "allocate-drivers", configPath: null };

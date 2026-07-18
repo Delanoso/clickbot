@@ -9,7 +9,19 @@
   },
   "apps": {
     "dispatch": {
-      "url": "https://example.com/dispatch",
+      "url": "https://login.lytx.com",
+      "login": {
+        "enabled": true,
+        "manual": true,
+        "usernameEnv": "LYTX_USERNAME",
+        "passwordEnv": "LYTX_PASSWORD",
+        "usernameSelector": "#username",
+        "passwordSelector": "#password",
+        "submitSelector": "#submit-button",
+        "rememberMeSelector": "#remember-me-input",
+        "successUrlPattern": "^(?!.*login\\.lytx\\.com).+",
+        "timeoutMs": 300000
+      },
       "selectors": {
         "truckNumber": "",
         "driverNameInput": "",

@@ -1,4 +1,5 @@
 import { chromium } from "playwright";
+import { maybeLogin } from "./login.js";
 
 /**
  * Launch Chromium and open both web apps in separate pages
@@ -15,10 +16,20 @@ export async function openApps(config) {
   const dispatchPage = await context.newPage();
   const fleetPage = await context.newPage();
 
-  await Promise.all([
-    dispatchPage.goto(config.apps.dispatch.url, { waitUntil: "domcontentloaded" }),
-    fleetPage.goto(config.apps.fleet.url, { waitUntil: "domcontentloaded" }),
-  ]);
+  // Open dispatch (Lytx) first so login can complete before the loop starts.
+  await dispatchPage.goto(config.apps.dispatch.url, {
+    waitUntil: "domcontentloaded",
+  });
+  await maybeLogin(dispatchPage, config.apps.dispatch, "dispatch");
+
+  // Fleet/second app may still be a placeholder during setup.
+  const fleetUrl = config.apps.fleet?.url;
+  if (fleetUrl && !String(fleetUrl).includes("example.com")) {
+    await fleetPage.goto(fleetUrl, { waitUntil: "domcontentloaded" });
+    await maybeLogin(fleetPage, config.apps.fleet, "fleet");
+  } else {
+    console.log("[fleet] URL not configured yet — leaving second tab blank.");
+  }
 
   return {
     browser,

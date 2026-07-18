@@ -49,11 +49,11 @@ export function loadConfig(options = {}) {
     config = deepMerge(config, loadJson(absolute));
   }
 
-  validateConfig(config);
+  validateConfig(config, { relax: Boolean(options.relaxValidation) });
   return config;
 }
 
-function validateConfig(config) {
+function validateConfig(config, { relax = false } = {}) {
   const dispatch = config.apps?.dispatch;
   const fleet = config.apps?.fleet;
   const missing = [];
@@ -61,18 +61,21 @@ function validateConfig(config) {
   if (!dispatch?.url || dispatch.url.includes("example.com")) {
     missing.push("apps.dispatch.url");
   }
-  if (!fleet?.url || fleet.url.includes("example.com")) {
-    missing.push("apps.fleet.url");
-  }
 
-  for (const key of ["truckNumber", "driverNameInput"]) {
-    if (!dispatch?.selectors?.[key]) {
-      missing.push(`apps.dispatch.selectors.${key}`);
+  if (!relax) {
+    if (!fleet?.url || fleet.url.includes("example.com")) {
+      missing.push("apps.fleet.url");
     }
-  }
-  for (const key of ["searchInput", "driverNameResult"]) {
-    if (!fleet?.selectors?.[key]) {
-      missing.push(`apps.fleet.selectors.${key}`);
+
+    for (const key of ["truckNumber", "driverNameInput"]) {
+      if (!dispatch?.selectors?.[key]) {
+        missing.push(`apps.dispatch.selectors.${key}`);
+      }
+    }
+    for (const key of ["searchInput", "driverNameResult"]) {
+      if (!fleet?.selectors?.[key]) {
+        missing.push(`apps.fleet.selectors.${key}`);
+      }
     }
   }
 

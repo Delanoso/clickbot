@@ -15,9 +15,18 @@ The bot keeps **both apps open** and loops this flow:
 
 | For local testing (no real apps) | For your real apps |
 | --- | --- |
-| Nothing else — use the built-in demo | The two app URLs |
-| `npm run demo` | CSS selectors for truck #, search, driver name, paste field |
-| | Login/session if the sites require sign-in |
+| Nothing else — use the built-in demo | **App 1:** [Lytx](https://login.lytx.com) (configured) |
+| `npm run demo` | **App 2:** URL still needed |
+| | CSS selectors for truck #, search, driver name, paste field |
+| | Lytx login (manual in browser, or `LYTX_USERNAME` / `LYTX_PASSWORD`) |
+
+### Progress
+
+- [x] App 1 URL: `https://login.lytx.com`
+- [x] Lytx login form selectors (`#username`, `#password`, `#submit-button`)
+- [ ] App 1: where truck number is shown after login
+- [ ] App 1: where to paste the driver name
+- [ ] App 2 URL + search/result selectors
 
 ## Quick test (demo apps)
 
@@ -42,9 +51,18 @@ Expected results:
 npm install
 npm run install-browsers
 cp config/local.example.json config/local.json
+cp .env.example .env   # optional, for automated Lytx login
 ```
 
-Edit `config/local.json` with your real app URLs and CSS selectors:
+Open Lytx so you can log in and inspect the page (selectors still TBD):
+
+```bash
+npm run explore
+```
+
+With `login.manual: true` (default), the browser opens Lytx and waits for you to sign in. Set `LYTX_USERNAME` / `LYTX_PASSWORD` in `.env` and `"manual": false` to automate sign-in.
+
+Edit `config/local.json` with the remaining selectors:
 
 | Field | Purpose |
 | --- | --- |
