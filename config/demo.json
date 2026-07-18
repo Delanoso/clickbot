@@ -1,0 +1,30 @@
+{
+  "headless": true,
+  "slowMoMs": 0,
+  "defaultDriverName": "Driver Unknown",
+  "loop": {
+    "enabled": true,
+    "delayBetweenRunsMs": 300,
+    "maxRuns": 4
+  },
+  "apps": {
+    "dispatch": {
+      "url": "http://127.0.0.1:4173/dispatch",
+      "selectors": {
+        "truckNumber": "#truck-number",
+        "driverNameInput": "#driver-name",
+        "submitButton": "#submit",
+        "nextItemButton": "#next-truck"
+      }
+    },
+    "fleet": {
+      "url": "http://127.0.0.1:4173/fleet",
+      "selectors": {
+        "searchInput": "#search",
+        "searchButton": "#search-button",
+        "driverNameResult": "#driver-name",
+        "resultReady": "#results:not([hidden])"
+      }
+    }
+  }
+}

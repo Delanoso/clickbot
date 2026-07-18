@@ -7,6 +7,8 @@
   "scripts": {
     "start": "node src/index.js",
     "allocate": "node src/index.js allocate-drivers",
+    "demo:server": "node demo/server.js",
+    "demo": "node scripts/run-demo.mjs",
     "test": "node src/utils/driverName.test.js",
     "install-browsers": "playwright install chromium"
   },

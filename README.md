@@ -11,7 +11,32 @@ The bot keeps **both apps open** and loops this flow:
 3. **Dispatch app** — paste the driver name
 4. If the name is missing or invalid → paste **`Driver Unknown`**
 
-## Setup
+## What you need for it to run
+
+| For local testing (no real apps) | For your real apps |
+| --- | --- |
+| Nothing else — use the built-in demo | The two app URLs |
+| `npm run demo` | CSS selectors for truck #, search, driver name, paste field |
+| | Login/session if the sites require sign-in |
+
+## Quick test (demo apps)
+
+This spins up two fake local web apps and runs the bot against them (4 trucks):
+
+```bash
+npm install
+npm run install-browsers
+npm run demo
+```
+
+Expected results:
+
+- `T-1001` → Alex Rivera
+- `T-1002` → Sam Okonkwo
+- `T-1003` → Driver Unknown (fleet returns `N/A`)
+- `T-404` → Driver Unknown (no driver found)
+
+## Real apps setup
 
 ```bash
 npm install

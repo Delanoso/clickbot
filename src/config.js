@@ -29,13 +29,24 @@ function deepMerge(base, override) {
   return result;
 }
 
-export function loadConfig() {
+export function loadConfig(options = {}) {
   const defaultPath = join(root, "config", "default.json");
-  const localPath = join(root, "config", "local.json");
+  const overridePath =
+    options.configPath ||
+    process.env.CLICKBOT_CONFIG ||
+    (existsSync(join(root, "config", "local.json"))
+      ? join(root, "config", "local.json")
+      : null);
 
   let config = loadJson(defaultPath);
-  if (existsSync(localPath)) {
-    config = deepMerge(config, loadJson(localPath));
+  if (overridePath) {
+    const absolute = overridePath.startsWith("/")
+      ? overridePath
+      : join(root, overridePath);
+    if (!existsSync(absolute)) {
+      throw new Error(`Config file not found: ${absolute}`);
+    }
+    config = deepMerge(config, loadJson(absolute));
   }
 
   validateConfig(config);

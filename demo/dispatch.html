@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dispatch App (demo)</title>
+    <style>
+      body {
+        font-family: Georgia, "Times New Roman", serif;
+        margin: 0;
+        min-height: 100vh;
+        background: linear-gradient(160deg, #e8f1f4 0%, #f7f3ea 55%, #dde7df 100%);
+        color: #1d2a2e;
+      }
+      main {
+        max-width: 40rem;
+        margin: 0 auto;
+        padding: 3rem 1.5rem;
+      }
+      h1 {
+        font-size: 2rem;
+        margin: 0 0 0.5rem;
+      }
+      p {
+        margin: 0 0 2rem;
+        opacity: 0.8;
+      }
+      label {
+        display: block;
+        margin: 1rem 0 0.35rem;
+        font-size: 0.9rem;
+      }
+      #truck-number {
+        font-size: 1.75rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+      }
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 0.7rem 0.8rem;
+        font: inherit;
+        border: 1px solid #7a8b90;
+        background: rgba(255, 255, 255, 0.7);
+      }
+      .actions {
+        display: flex;
+        gap: 0.75rem;
+        margin-top: 1.25rem;
+      }
+      button {
+        font: inherit;
+        padding: 0.65rem 1rem;
+        border: 1px solid #1d2a2e;
+        background: #1d2a2e;
+        color: #f7f3ea;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: transparent;
+        color: #1d2a2e;
+      }
+      #log {
+        margin-top: 2rem;
+        white-space: pre-wrap;
+        font-family: ui-monospace, monospace;
+        font-size: 0.85rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Dispatch</h1>
+      <p>Demo board for allocating a driver to the current truck.</p>
+
+      <label>Truck number</label>
+      <div id="truck-number">T-1001</div>
+
+      <label for="driver-name">Driver name</label>
+      <input id="driver-name" type="text" autocomplete="off" />
+
+      <div class="actions">
+        <button id="submit" type="button">Save allocation</button>
+        <button id="next-truck" class="secondary" type="button">Next truck</button>
+      </div>
+
+      <div id="log"></div>
+    </main>
+
+    <script>
+      const trucks = ["T-1001", "T-1002", "T-1003", "T-404"];
+      let index = 0;
+      const truckEl = document.getElementById("truck-number");
+      const driverInput = document.getElementById("driver-name");
+      const logEl = document.getElementById("log");
+
+      function renderTruck() {
+        truckEl.textContent = trucks[index];
+        driverInput.value = "";
+      }
+
+      document.getElementById("submit").addEventListener("click", () => {
+        const truck = truckEl.textContent;
+        const driver = driverInput.value.trim() || "(empty)";
+        logEl.textContent += `Saved ${truck} -> ${driver}\n`;
+      });
+
+      document.getElementById("next-truck").addEventListener("click", () => {
+        index = (index + 1) % trucks.length;
+        renderTruck();
+      });
+
+      renderTruck();
+    </script>
+  </body>
+</html>

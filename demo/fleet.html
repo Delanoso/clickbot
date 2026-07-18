@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fleet App (demo)</title>
+    <style>
+      body {
+        font-family: Georgia, "Times New Roman", serif;
+        margin: 0;
+        min-height: 100vh;
+        background: linear-gradient(145deg, #f3ebe2 0%, #e4eef1 50%, #dfe8dd 100%);
+        color: #243028;
+      }
+      main {
+        max-width: 40rem;
+        margin: 0 auto;
+        padding: 3rem 1.5rem;
+      }
+      h1 {
+        font-size: 2rem;
+        margin: 0 0 0.5rem;
+      }
+      p {
+        margin: 0 0 2rem;
+        opacity: 0.8;
+      }
+      .row {
+        display: flex;
+        gap: 0.5rem;
+      }
+      input {
+        flex: 1;
+        padding: 0.7rem 0.8rem;
+        font: inherit;
+        border: 1px solid #6f7f74;
+        background: rgba(255, 255, 255, 0.7);
+      }
+      button {
+        font: inherit;
+        padding: 0.65rem 1rem;
+        border: 1px solid #243028;
+        background: #243028;
+        color: #f3ebe2;
+        cursor: pointer;
+      }
+      .search-results {
+        margin-top: 1.5rem;
+        min-height: 4rem;
+      }
+      .driver-name {
+        font-size: 1.5rem;
+        font-weight: 700;
+      }
+      .muted {
+        opacity: 0.7;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Fleet</h1>
+      <p>Demo lookup: search a truck number to find its driver.</p>
+
+      <div class="row">
+        <input id="search" type="text" placeholder="Truck number" autocomplete="off" />
+        <button class="search" id="search-button" type="button">Search</button>
+      </div>
+
+      <div class="search-results" id="results" hidden>
+        <div class="muted">Driver</div>
+        <div class="driver-name" id="driver-name"></div>
+      </div>
+    </main>
+
+    <script>
+      // T-404 intentionally has no driver so the bot should use "Driver Unknown"
+      const driversByTruck = {
+        "T-1001": "Alex Rivera",
+        "T-1002": "Sam Okonkwo",
+        "T-1003": "N/A",
+      };
+
+      const searchInput = document.getElementById("search");
+      const results = document.getElementById("results");
+      const driverName = document.getElementById("driver-name");
+
+      function runSearch() {
+        const truck = searchInput.value.trim().toUpperCase();
+        const name = driversByTruck[truck];
+        results.hidden = false;
+        driverName.textContent = name || "";
+      }
+
+      document.getElementById("search-button").addEventListener("click", runSearch);
+      searchInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          runSearch();
+        }
+      });
+    </script>
+  </body>
+</html>
