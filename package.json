@@ -1,0 +1,19 @@
+{
+  "name": "clickbot",
+  "version": "0.1.0",
+  "description": "Browser automation bot for allocating drivers to trucks across two web apps",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "allocate": "node src/index.js allocate-drivers",
+    "test": "node src/utils/driverName.test.js",
+    "install-browsers": "playwright install chromium"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "playwright": "^1.53.0"
+  }
+}

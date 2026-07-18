@@ -1,0 +1,34 @@
+{
+  "headless": false,
+  "slowMoMs": 100,
+  "defaultDriverName": "Driver Unknown",
+  "loop": {
+    "enabled": true,
+    "delayBetweenRunsMs": 2000,
+    "maxRuns": 0
+  },
+  "apps": {
+    "dispatch": {
+      "url": "https://example.com/dispatch",
+      "selectors": {
+        "truckNumber": "",
+        "driverNameInput": "",
+        "submitButton": "",
+        "nextItemButton": ""
+      }
+    },
+    "fleet": {
+      "url": "https://example.com/fleet",
+      "selectors": {
+        "searchInput": "",
+        "searchButton": "",
+        "driverNameResult": "",
+        "resultReady": ""
+      }
+    }
+  },
+  "validation": {
+    "minNameLength": 2,
+    "invalidNames": ["", "n/a", "na", "null", "undefined", "-", "--"]
+  }
+}
