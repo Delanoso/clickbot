@@ -8,17 +8,28 @@ export async function maybeLogin(page, appConfig, appName) {
     return false;
   }
 
-  const usernameEnv = login.usernameEnv || "LYTX_USERNAME";
-  const passwordEnv = login.passwordEnv || "LYTX_PASSWORD";
+  await dismissCookieBanner(page, login);
+
+  const usernameEnv = login.usernameEnv || "USERNAME";
+  const passwordEnv = login.passwordEnv || "PASSWORD";
+  const accountEnv = login.accountEnv || null;
+
   const username = process.env[usernameEnv];
   const password = process.env[passwordEnv];
+  const account = accountEnv ? process.env[accountEnv] : null;
 
-  if (login.manual || !username || !password) {
+  const canAutomate =
+    !login.manual &&
+    username &&
+    password &&
+    (!login.accountSelector || account);
+
+  if (!canAutomate) {
+    const hints = [usernameEnv, passwordEnv];
+    if (login.accountSelector) hints.unshift(accountEnv || "ACCOUNT");
     console.log(
       `[${appName}] Waiting for manual login in the browser...` +
-        (!username || !password
-          ? ` (set ${usernameEnv}/${passwordEnv} to automate sign-in)`
-          : "")
+        ` (set ${hints.join("/")} and manual:false to automate)`
     );
     await waitUntilLoggedIn(page, login);
     console.log(`[${appName}] Login detected, continuing.`);
@@ -26,6 +37,12 @@ export async function maybeLogin(page, appConfig, appName) {
   }
 
   console.log(`[${appName}] Signing in as ${username}...`);
+
+  if (login.accountSelector) {
+    await page.locator(login.accountSelector).first().waitFor({ state: "visible" });
+    await page.locator(login.accountSelector).first().fill(account);
+  }
+
   await page.locator(login.usernameSelector).first().waitFor({ state: "visible" });
   await page.locator(login.usernameSelector).first().fill(username);
   await page.locator(login.passwordSelector).first().fill(password);
@@ -43,6 +60,19 @@ export async function maybeLogin(page, appConfig, appName) {
   return true;
 }
 
+async function dismissCookieBanner(page, login) {
+  const selector = login.cookieAcceptSelector;
+  if (!selector) return;
+
+  try {
+    const button = page.locator(selector).first();
+    await button.waitFor({ state: "visible", timeout: 4000 });
+    await button.click();
+  } catch {
+    // Banner not shown — fine.
+  }
+}
+
 async function waitUntilLoggedIn(page, login) {
   const timeout = login.timeoutMs ?? 300000;
 
@@ -54,6 +84,9 @@ async function waitUntilLoggedIn(page, login) {
     return;
   }
 
-  const pattern = login.successUrlPattern || "^(?!.*login\\.lytx\\.com).+";
-  await page.waitForURL(new RegExp(pattern), { timeout });
+  if (!login.successUrlPattern) {
+    throw new Error("login.successUrlPattern or login.successSelector is required");
+  }
+
+  await page.waitForURL(new RegExp(login.successUrlPattern), { timeout });
 }

@@ -22,7 +22,6 @@ export async function openApps(config) {
   });
   await maybeLogin(dispatchPage, config.apps.dispatch, "dispatch");
 
-  // Fleet/second app may still be a placeholder during setup.
   const fleetUrl = config.apps.fleet?.url;
   if (fleetUrl && !String(fleetUrl).includes("example.com")) {
     await fleetPage.goto(fleetUrl, { waitUntil: "domcontentloaded" });

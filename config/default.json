@@ -30,7 +30,22 @@
       }
     },
     "fleet": {
-      "url": "https://example.com/fleet",
+      "url": "https://www.webfleet.com/webfleet/products/login/?application=webfleet",
+      "login": {
+        "enabled": true,
+        "manual": true,
+        "accountEnv": "WEBFLEET_ACCOUNT",
+        "usernameEnv": "WEBFLEET_USERNAME",
+        "passwordEnv": "WEBFLEET_PASSWORD",
+        "accountSelector": "#accountname",
+        "usernameSelector": "#useraccount",
+        "passwordSelector": "#password",
+        "submitSelector": "#submit_btn",
+        "rememberMeSelector": "#rememberMe",
+        "cookieAcceptSelector": "#wi-CookieConsent_Accept",
+        "successUrlPattern": "live-wf\\.webfleet\\.com",
+        "timeoutMs": 300000
+      },
       "selectors": {
         "searchInput": "",
         "searchButton": "",

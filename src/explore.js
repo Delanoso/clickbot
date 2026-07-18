@@ -28,11 +28,12 @@ async function main() {
 
   const { browser, pages } = await openApps(config);
   console.log("\nApps are open.");
-  console.log(`Dispatch URL: ${pages.dispatch.url()}`);
-  console.log("Inspect the page, then tell me:");
-  console.log("  1) Where the truck number appears (selector or description)");
-  console.log("  2) Where to paste the driver name");
-  console.log("  3) The second web app URL");
+  console.log(`Lytx (dispatch): ${pages.dispatch.url()}`);
+  console.log(`Webfleet (fleet): ${pages.fleet.url()}`);
+  console.log("Log in on both tabs if needed, then tell me:");
+  console.log("  1) Lytx: where the truck number appears");
+  console.log("  2) Lytx: where to paste the driver name");
+  console.log("  3) Webfleet: where to search the truck + where the driver name shows");
   console.log("\nPress Ctrl+C when finished.\n");
 
   await new Promise(() => {});

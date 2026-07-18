@@ -16,17 +16,18 @@ The bot keeps **both apps open** and loops this flow:
 | For local testing (no real apps) | For your real apps |
 | --- | --- |
 | Nothing else — use the built-in demo | **App 1:** [Lytx](https://login.lytx.com) (configured) |
-| `npm run demo` | **App 2:** URL still needed |
+| `npm run demo` | **App 2:** [Webfleet](https://www.webfleet.com/webfleet/products/login/?application=webfleet) (configured) |
 | | CSS selectors for truck #, search, driver name, paste field |
-| | Lytx login (manual in browser, or `LYTX_USERNAME` / `LYTX_PASSWORD`) |
+| | Logins (manual in browser, or env vars in `.env`) |
 
 ### Progress
 
-- [x] App 1 URL: `https://login.lytx.com`
-- [x] Lytx login form selectors (`#username`, `#password`, `#submit-button`)
-- [ ] App 1: where truck number is shown after login
-- [ ] App 1: where to paste the driver name
-- [ ] App 2 URL + search/result selectors
+- [x] App 1 URL: Lytx (`https://login.lytx.com`)
+- [x] App 2 URL: Webfleet login
+- [x] Login forms for both apps
+- [ ] App 1 (Lytx): where truck number is shown after login
+- [ ] App 1 (Lytx): where to paste the driver name
+- [ ] App 2 (Webfleet): search box + driver name result selectors
 
 ## Quick test (demo apps)
 
@@ -60,7 +61,10 @@ Open Lytx so you can log in and inspect the page (selectors still TBD):
 npm run explore
 ```
 
-With `login.manual: true` (default), the browser opens Lytx and waits for you to sign in. Set `LYTX_USERNAME` / `LYTX_PASSWORD` in `.env` and `"manual": false` to automate sign-in.
+With `login.manual: true` (default), the browser opens **Lytx** and **Webfleet** and waits for you to sign in on each. Set credentials in `.env` and `"manual": false` to automate:
+
+- Lytx: `LYTX_USERNAME`, `LYTX_PASSWORD`
+- Webfleet: `WEBFLEET_ACCOUNT`, `WEBFLEET_USERNAME`, `WEBFLEET_PASSWORD`
 
 Edit `config/local.json` with the remaining selectors:
 
