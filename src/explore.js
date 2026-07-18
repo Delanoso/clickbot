@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { loadEnvFile } from "./loadEnv.js";
 import { loadConfig } from "./config.js";
 import { openApps } from "./browser.js";
@@ -9,13 +12,12 @@ loadEnvFile();
  * where the truck number / driver fields live. Does not run the loop.
  */
 async function main() {
+  const root = join(dirname(fileURLToPath(import.meta.url)), "..");
   const configPath =
     process.env.CLICKBOT_CONFIG ||
-    (await import("node:fs")).existsSync(
-      new URL("../config/local.json", import.meta.url)
-    )
+    (existsSync(join(root, "config", "local.json"))
       ? "config/local.json"
-      : "config/local.example.json";
+      : "config/local.example.json");
 
   const config = loadConfig({
     configPath,
