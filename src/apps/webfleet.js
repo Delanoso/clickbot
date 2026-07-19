@@ -29,13 +29,17 @@ export async function lookupDriverInWebfleet(page, selectors, truckNumber) {
 
   const search = await resolveSearchInput(page, selectors);
   await search.fill("");
-  await search.fill(String(truckNumber));
+  // Use leading id token so "H2110 - Sold" still finds H2110 in Webfleet.
+  const searchTerm = String(truckNumber).split(/\s+[–—-]\s+|\s+/)[0];
+  await search.fill(searchTerm);
   await search.press("Enter");
   await sleep(1500);
 
   // Click matching list row if present.
   const row = page
-    .getByText(new RegExp(truckNumber.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"))
+    .getByText(
+      new RegExp(searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i")
+    )
     .first();
   try {
     await row.waitFor({ state: "visible", timeout: 8000 });

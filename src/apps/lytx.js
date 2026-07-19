@@ -117,14 +117,16 @@ export async function filterLytxByVehicle(page, selectors, truckNumber) {
     await sleep(200);
   }
   await input.fill("");
-  await input.fill(String(truckNumber));
+  // Search by the leading vehicle id token ("H2110" from "H2110 - Sold").
+  const searchTerm = String(truckNumber).split(/\s+[–—-]\s+|\s+/)[0];
+  await input.fill(searchTerm);
   await sleep(1000);
 
   const suggestion = page
     .locator("button.dropdown-item, .dropdown-item")
     .filter({
       hasText: new RegExp(
-        `^\\s*${truckNumber.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`,
+        truckNumber.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
         "i"
       ),
     })
@@ -134,7 +136,22 @@ export async function filterLytxByVehicle(page, selectors, truckNumber) {
     await suggestion.waitFor({ state: "visible", timeout: 4000 });
     await suggestion.click();
   } catch {
-    await input.press("Enter");
+    // Prefer exact truck label; otherwise take the first suggestion for the id.
+    const fallbackSuggestion = page
+      .locator("button.dropdown-item, .dropdown-item")
+      .filter({
+        hasText: new RegExp(
+          searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+          "i"
+        ),
+      })
+      .first();
+    try {
+      await fallbackSuggestion.waitFor({ state: "visible", timeout: 2000 });
+      await fallbackSuggestion.click();
+    } catch {
+      await input.press("Enter");
+    }
   }
 
   if (selectors.vehicleSearchButton) {
@@ -159,56 +176,75 @@ export async function filterLytxByVehicle(page, selectors, truckNumber) {
 }
 
 /**
- * Select visible rows and open the Assign Driver modal, then paste the driver name.
+ * Select visible rows for a specific truck and open the Assign Driver modal.
  * If the looked-up name is not in the Lytx dropdown, assign "Driver Unknown" instead.
  */
 export async function assignDriverInLytx(
   page,
   selectors,
   driverName,
-  { defaultDriverName = "Driver Unknown" } = {}
+  { defaultDriverName = "Driver Unknown", truckNumber = null } = {}
 ) {
   // Custom Lytx checkboxes are <i id="assignDriverCheckbox"> icons, not inputs.
-  const boxes = page.locator("#assignDriverCheckbox, i.lx-checkbox-inactive");
-  const boxCount = await boxes.count();
-  if (boxCount > 0) {
-    for (let i = 0; i < boxCount; i += 1) {
-      const box = boxes.nth(i);
-      const className = (await box.getAttribute("class")) || "";
-      if (/inactive/i.test(className) && (await box.isVisible().catch(() => false))) {
-        await box.click({ force: true });
-      }
+  // Only select rows for this truck — never other vehicles if the filter is leaky.
+  const rows = page.locator(".cdk-row.lytx-table-row");
+  const rowCount = await rows.count();
+  let selected = 0;
+  for (let i = 0; i < rowCount; i += 1) {
+    const row = rows.nth(i);
+    const vehicleText = normalizeVehicle(
+      await row.locator(".cdk-column-Vehicle").innerText().catch(() => "")
+    );
+    if (truckNumber && vehicleText !== truckNumber) {
+      continue;
     }
-    await sleep(300);
-  } else if (selectors.selectAllCheckbox) {
+    const box = row.locator("#assignDriverCheckbox, i.checkbox").first();
+    if (!(await box.count())) continue;
+    const className = (await box.getAttribute("class")) || "";
+    if (/inactive/i.test(className)) {
+      await box.click({ force: true });
+      selected += 1;
+    } else {
+      selected += 1; // already selected
+    }
+  }
+
+  if (selected === 0 && selectors.selectAllCheckbox) {
     await clickIfPresentFrom(page, selectors.selectAllCheckbox, { timeout: 5000 });
   }
 
-  const batch = page.locator("#batchAssignButton");
-  let opened = false;
-  if (await batch.isVisible().catch(() => false)) {
-    if (await batch.isEnabled().catch(() => false)) {
-      await batch.click();
-      opened = true;
+  if (selected === 0) {
+    // Fall back to first row Assign button for this truck only.
+    const rowAssign = truckNumber
+      ? rows
+          .filter({
+            has: page.locator(".cdk-column-Vehicle", {
+              hasText: new RegExp(
+                truckNumber.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+                "i"
+              ),
+            }),
+          })
+          .getByRole("button", { name: "Assign", exact: true })
+          .first()
+      : page.getByRole("button", { name: "Assign", exact: true }).first();
+    if (await rowAssign.isVisible().catch(() => false)) {
+      await rowAssign.click();
+    } else {
+      throw new Error(`No selectable rows found for truck ${truckNumber || "(unknown)"}.`);
     }
-  }
-
-  if (!opened) {
-    opened =
-      (await clickIfPresentFrom(
-        page,
-        selectors.assignSelectedButton || { role: "button", name: "Assign Selected" },
-        { timeout: 3000 }
-      )) ||
-      (await clickIfPresentFrom(
-        page,
-        selectors.rowAssignButton || { role: "button", name: "Assign", exact: true },
-        { timeout: 5000 }
-      ));
-  }
-
-  if (!opened) {
-    throw new Error("Could not open Assign Driver modal (Assign Selected / Assign).");
+  } else {
+    const batch = page.locator("#batchAssignButton");
+    if (
+      (await batch.isVisible().catch(() => false)) &&
+      (await batch.isEnabled().catch(() => false))
+    ) {
+      await batch.click();
+    } else {
+      throw new Error(
+        `Selected ${selected} row(s) for ${truckNumber}, but Assign Selected stayed disabled.`
+      );
+    }
   }
 
   const inputSel =

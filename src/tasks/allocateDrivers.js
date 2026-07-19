@@ -114,6 +114,7 @@ async function allocateOne(lytx, webfleet, config) {
   await filterLytxByVehicle(lytx, lytxSel, truckNumber);
   const assignResult = await assignDriverInLytx(lytx, lytxSel, driverName, {
     defaultDriverName: config.defaultDriverName || "Driver Unknown",
+    truckNumber,
   });
   await clearLytxVehicleFilter(lytx, lytxSel);
 
