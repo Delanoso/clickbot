@@ -45,7 +45,7 @@ export async function lookupDriverInWebfleet(page, selectors, truckNumber) {
   await search.fill("", { force: true });
   await search.fill(searchTerm, { force: true });
   await search.press("Enter");
-  await sleep(1500);
+  await sleep(1000);
 
   if (selectors.driverNumberResult) {
     try {
@@ -118,8 +118,11 @@ async function readDriverNoFromTable(page, searchTerm) {
       if (!scored.length) return "";
       const best = scored[0];
       const no = normalize(best.no);
-      // Driver numbers look like D3309 / DR3995 / ND1221 / Z2888
-      if (!no || /^—+$/.test(no)) return "";
+
+      // No driver allocated / blank No. → empty (caller maps to Driver Unknown).
+      if (!no || /^—+$/.test(no) || /^(no driver|n\/a|na|none|unknown|-|--)$/i.test(no)) {
+        return "";
+      }
       return no;
     }, searchTerm);
 
@@ -134,8 +137,10 @@ function normalizeDriverNo(raw) {
     .replace(/\s+/g, " ")
     .trim();
   if (!value || /^—+$/.test(value)) return "";
+  if (/^(no driver|n\/a|na|none|unknown|-|--)$/i.test(value)) return "";
   // Keep the id token only (first word), e.g. "D3309"
   const token = value.split(/\s+/)[0];
+  if (/^(no|n\/a|na|none|unknown)$/i.test(token)) return "";
   if (!/^[A-Za-z]{0,4}\d{2,}$/i.test(token) && !/^[A-Za-z]+\d+/i.test(token)) {
     // Still allow unusual ids; just reject obvious names-with-phones.
     if (/\d{6,}/.test(value.replace(/\s/g, ""))) return "";
