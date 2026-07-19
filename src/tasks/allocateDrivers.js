@@ -10,7 +10,7 @@ import {
   lookupDriverInWebfleet,
 } from "../apps/webfleet.js";
 import { openApps } from "../browser.js";
-import { resolveDriverName } from "../utils/driverName.js";
+import { resolveDriverName, shouldForceDefaultDriver } from "../utils/driverName.js";
 
 /**
  * Task 1: allocate drivers to trucks (Lytx + Webfleet).
@@ -77,7 +77,9 @@ export async function runAllocateDrivers(config) {
       }
 
       let suffix = "";
-      if (result.usedDropdownFallback) {
+      if (result.reason === "sold_or_ld_vehicle") {
+        suffix = " (Sold/LD/demo → Driver Unknown)";
+      } else if (result.usedDropdownFallback) {
         suffix = " (fallback: not in Lytx dropdown → Driver Unknown)";
       } else if (result.usedFallback) {
         suffix = ` (fallback: ${result.reason})`;
@@ -128,14 +130,31 @@ async function allocateOne(lytx, webfleet, config) {
     throw new Error("Vehicle/truck number was empty on the Lytx Assign Drivers table.");
   }
 
-  // 2) Webfleet: search and copy driver name
-  await webfleet.bringToFront();
-  await ensureWebfleetMap(webfleet, config.apps.fleet);
-  const rawDriverName = await lookupDriverInWebfleet(webfleet, fleetSel, truckNumber);
-  const { name: driverName, usedFallback, reason } = resolveDriverName(
-    rawDriverName,
-    config
-  );
+  // 2) Webfleet lookup — skip for Sold / LD / demo trucks (always Driver Unknown)
+  let driverName;
+  let usedFallback = false;
+  let reason = null;
+
+  if (shouldForceDefaultDriver(truckNumber)) {
+    driverName = config.defaultDriverName || "Driver Unknown";
+    usedFallback = true;
+    reason = "sold_or_ld_vehicle";
+    console.log(
+      `Truck ${truckNumber} marked Sold/LD/demo — assigning ${driverName} (skipping Webfleet).`
+    );
+  } else {
+    await webfleet.bringToFront();
+    await ensureWebfleetMap(webfleet, config.apps.fleet);
+    const rawDriverName = await lookupDriverInWebfleet(
+      webfleet,
+      fleetSel,
+      truckNumber
+    );
+    ({ name: driverName, usedFallback, reason } = resolveDriverName(
+      rawDriverName,
+      config
+    ));
+  }
 
   // 3) Lytx: filter this vehicle, assign driver via modal
   await lytx.bringToFront();

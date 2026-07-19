@@ -33,6 +33,19 @@ export function resolveDriverName(rawName, config) {
 }
 
 /**
+ * Sold / LD / demo / accident vehicles should always use Driver Unknown
+ * (no Webfleet lookup needed).
+ */
+export function shouldForceDefaultDriver(truckNumber) {
+  const value = String(truckNumber || "");
+  return (
+    /\b(sold|accident|demo)\b/i.test(value) ||
+    /^ldv/i.test(value.trim()) ||
+    /\bldv?\d+/i.test(value)
+  );
+}
+
+/**
  * Webfleet often returns:
  * - "TH2239 - Phillip Mofokeng"
  * - "Sipha Khanyi 083 879 3215 / 063 735 0503"

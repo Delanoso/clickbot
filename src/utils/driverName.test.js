@@ -1,4 +1,8 @@
-import { cleanDriverName, resolveDriverName } from "./driverName.js";
+import {
+  cleanDriverName,
+  resolveDriverName,
+  shouldForceDefaultDriver,
+} from "./driverName.js";
 
 const config = {
   defaultDriverName: "Driver Unknown",
@@ -33,5 +37,11 @@ assert(fromList === "Phillip Mofokeng", "should strip vehicle id prefix");
 
 const withPhones = cleanDriverName("Sipha Khanyi 083 879 3215 / 063 735 0503");
 assert(withPhones === "Sipha Khanyi", `should strip phones, got: ${withPhones}`);
+
+assert(shouldForceDefaultDriver("H2161 - Sold") === true, "sold should force default");
+assert(shouldForceDefaultDriver("LDV1801") === true, "LDV should force default");
+assert(shouldForceDefaultDriver("Demo 95") === true, "demo should force default");
+assert(shouldForceDefaultDriver("H2100 Accident") === true, "accident should force default");
+assert(shouldForceDefaultDriver("H2325") === false, "normal truck should look up");
 
 console.log("driverName tests passed");
