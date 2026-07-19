@@ -24,18 +24,35 @@
         "timeoutMs": 300000
       },
       "selectors": {
-        "pageReady": { "text": "ASSIGN DRIVERS" },
+        "pageReady": {
+          "text": "ASSIGN DRIVERS"
+        },
         "firstVehicleCell": "table tbody tr:first-child td:nth-child(3)",
-        "vehicleSearchInput": { "placeholder": "Search Vehicle Name" },
+        "vehicleSearchInput": {
+          "placeholder": "Search Vehicle Name"
+        },
         "selectAllCheckbox": "table thead input[type='checkbox']",
-        "assignSelectedButton": { "role": "button", "name": "Assign Selected" },
-        "rowAssignButton": { "role": "button", "name": "Assign", "exact": true },
-        "driverNameInput": { "placeholder": "Search Name or ID" },
-        "assignConfirmButton": { "role": "button", "name": "Assign", "exact": true }
+        "assignSelectedButton": {
+          "role": "button",
+          "name": "Assign Selected"
+        },
+        "rowAssignButton": {
+          "role": "button",
+          "name": "Assign",
+          "exact": true
+        },
+        "driverNameInput": {
+          "placeholder": "Search Name or ID"
+        },
+        "assignConfirmButton": {
+          "role": "button",
+          "name": "Assign",
+          "exact": true
+        }
       }
     },
     "fleet": {
-      "url": "https://www.webfleet.com/webfleet/products/login/?application=webfleet",
+      "url": "https://login.webfleet.com/auth/realms/webfleet/protocol/openid-connect/auth?response_type=code&client_id=atlantis&redirect_uri=https%3A%2F%2Flive-wf.webfleet.com%2Flogin%3FlogoutRedirect%3Dhttps%253A%252F%252Flive-wf.webfleet.com%252Fweb%252Fmap&state=3%28x0%2F%21%7E&scope=openid&brand_id=webfleet",
       "workUrl": "https://live-wf.webfleet.com/web/map",
       "login": {
         "enabled": true,
@@ -53,13 +70,25 @@
         "timeoutMs": 300000
       },
       "selectors": {
-        "vehiclesTab": { "text": "VEHICLES" },
-        "searchInput": { "placeholder": "Search" }
+        "vehiclesTab": {
+          "text": "VEHICLES"
+        },
+        "searchInput": {
+          "placeholder": "Search"
+        }
       }
     }
   },
   "validation": {
     "minNameLength": 2,
-    "invalidNames": ["", "n/a", "na", "null", "undefined", "-", "--"]
+    "invalidNames": [
+      "",
+      "n/a",
+      "na",
+      "null",
+      "undefined",
+      "-",
+      "--"
+    ]
   }
 }
