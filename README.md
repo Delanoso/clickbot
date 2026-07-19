@@ -87,6 +87,19 @@ With `login.manual: true` (default), the browser opens **Lytx** and **Webfleet**
 
 Tip: if a click misses in the real apps, right-click the element → Inspect → Copy selector and put it in `config/local.json`.
 
+## Task 2: FYI Notify (Lytx only)
+
+Same Lytx login. From the Driver Safety dashboard:
+
+1. Open **FYI NOTIFY**
+2. Click **Preview** on a card
+3. Scroll to **Resolve** → **Yes, Confirm**
+4. Repeat until no FYI Notify items remain
+
+```bash
+npm run fyi
+```
+
 ## Run
 
 ```bash

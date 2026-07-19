@@ -47,6 +47,26 @@ export async function openApps(config) {
   };
 }
 
+/**
+ * Lytx-only browser session (for tasks that do not need Webfleet).
+ */
+export async function openLytxOnly(config) {
+  const browser = await chromium.launch({
+    headless: Boolean(config.headless),
+    slowMo: config.slowMoMs ?? 0,
+  });
+
+  const context = await browser.newContext();
+  const page = await context.newPage();
+
+  await page.goto(config.apps.dispatch.url, {
+    waitUntil: "domcontentloaded",
+  });
+  await maybeLogin(page, config.apps.dispatch, "dispatch");
+
+  return { browser, context, page };
+}
+
 export async function readText(page, selector, { timeout = 15000 } = {}) {
   const locator = page.locator(selector).first();
   await locator.waitFor({ state: "visible", timeout });

@@ -54,6 +54,26 @@
         "vehicleColumn": ".cdk-row.lytx-table-row .cdk-column-Vehicle",
         "vehicleSearchType": "[data-test-id=\"dropdown-select-span\"]",
         "vehicleSearchTypeOption": "[data-test-id=\"common-dropDownList-item-0\"]"
+      },
+      "fyi": {
+        "selectors": {
+          "openTile": {
+            "text": "FYI NOTIFY"
+          },
+          "previewButton": {
+            "role": "button",
+            "name": "Preview"
+          },
+          "resolveButton": {
+            "role": "button",
+            "name": "Resolve",
+            "exact": true
+          },
+          "confirmButton": {
+            "role": "button",
+            "name": "Yes, Confirm"
+          }
+        }
       }
     },
     "fleet": {

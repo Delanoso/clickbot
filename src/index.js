@@ -1,6 +1,7 @@
 import { loadEnvFile } from "./loadEnv.js";
 import { loadConfig } from "./config.js";
 import { runAllocateDrivers } from "./tasks/allocateDrivers.js";
+import { runFyiNotify } from "./tasks/fyiNotify.js";
 
 loadEnvFile();
 
@@ -18,13 +19,9 @@ function parseArgs(argv) {
       args.configPath = token.slice("--config=".length);
       continue;
     }
-    if (!token.startsWith("-") && args.task === "allocate-drivers" && token !== "allocate-drivers") {
-      // first positional can be the task name
+    if (!token.startsWith("-")) {
       args.task = token;
       continue;
-    }
-    if (token === "allocate-drivers") {
-      args.task = token;
     }
   }
 
@@ -33,15 +30,22 @@ function parseArgs(argv) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const config = loadConfig({ configPath: args.configPath });
+  const relaxValidation = args.task === "fyi-notify";
+  const config = loadConfig({
+    configPath: args.configPath,
+    relaxValidation,
+  });
 
   switch (args.task) {
     case "allocate-drivers":
       await runAllocateDrivers(config);
       break;
+    case "fyi-notify":
+      await runFyiNotify(config);
+      break;
     default:
       console.error(`Unknown task: ${args.task}`);
-      console.error("Available tasks: allocate-drivers");
+      console.error("Available tasks: allocate-drivers, fyi-notify");
       process.exitCode = 1;
   }
 }

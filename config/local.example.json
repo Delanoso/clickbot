@@ -56,6 +56,26 @@
           "text": "UNASSIGNED DRIVERS"
         },
         "vehicleColumn": ".cdk-row.lytx-table-row .cdk-column-Vehicle"
+      },
+      "fyi": {
+        "selectors": {
+          "openTile": {
+            "text": "FYI NOTIFY"
+          },
+          "previewButton": {
+            "role": "button",
+            "name": "Preview"
+          },
+          "resolveButton": {
+            "role": "button",
+            "name": "Resolve",
+            "exact": true
+          },
+          "confirmButton": {
+            "role": "button",
+            "name": "Yes, Confirm"
+          }
+        }
       }
     },
     "fleet": {
