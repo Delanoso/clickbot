@@ -1,5 +1,6 @@
 import { openLytxOnly } from "../browser.js";
 import {
+  dismissOverlays,
   ensureFyiNotifyPage,
   hasFyiPreview,
   resolveOneFyiNotify,
@@ -58,9 +59,17 @@ export async function runFyiNotify(config) {
         failStreak += 1;
         console.log(`FYI resolve failed (will retry): ${error.message || error}`);
         // Recover UI and continue — one flaky confirm click should not stop the loop.
-        await page.keyboard.press("Escape").catch(() => {});
-        await sleep(800);
-        await ensureFyiNotifyPage(page, fyiConfig);
+        try {
+          await page.keyboard.press("Escape").catch(() => {});
+          await sleep(500);
+          await dismissOverlays(page);
+          await ensureFyiNotifyPage(page, fyiConfig);
+        } catch (recoverError) {
+          console.log(`FYI UI recovery failed, reloading: ${recoverError.message || recoverError}`);
+          await page.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
+          await sleep(1500);
+          await ensureFyiNotifyPage(page, fyiConfig).catch(() => {});
+        }
         if (failStreak >= 5) {
           console.log("FYI resolve failed 5 times in a row — stopping.");
           break;

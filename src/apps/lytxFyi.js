@@ -7,7 +7,9 @@ export async function ensureFyiNotifyPage(page, appConfig = {}) {
   const selectors = appConfig.fyi?.selectors || appConfig.selectors?.fyi || {};
   const tile = selectors.openTile || { text: "FYI NOTIFY" };
 
-  // Already on FYI notify list?
+  await dismissOverlays(page);
+
+  // Already on FYI notify list with Preview cards?
   if (/fyi/i.test(page.url()) || (await page.getByText("FYI NOTIFY", { exact: true }).count())) {
     const preview = page.getByRole("button", { name: /Preview/i }).first();
     if (await preview.isVisible().catch(() => false)) {
@@ -21,9 +23,16 @@ export async function ensureFyiNotifyPage(page, appConfig = {}) {
     await clickFrom(page, tile);
   } catch {
     // Fall back to sidebar / hash if tile not visible.
+    await dismissOverlays(page);
     const sidebar = page.getByText(/^Fyi Notify$/i).first();
     if (await sidebar.isVisible().catch(() => false)) {
-      await sidebar.click();
+      await sidebar.click({ force: true }).catch(async () => {
+        if (appConfig.fyi?.workUrl || appConfig.workUrl) {
+          await page.goto(appConfig.fyi?.workUrl || appConfig.workUrl, {
+            waitUntil: "domcontentloaded",
+          });
+        }
+      });
     } else if (appConfig.fyi?.workUrl || appConfig.workUrl) {
       await page.goto(appConfig.fyi?.workUrl || appConfig.workUrl, {
         waitUntil: "domcontentloaded",
@@ -31,6 +40,7 @@ export async function ensureFyiNotifyPage(page, appConfig = {}) {
     }
   }
 
+  await dismissOverlays(page);
   await page.getByText(/FYI NOTIFY/i).first().waitFor({ state: "visible", timeout: 60000 });
   await sleep(1500);
 }
@@ -39,6 +49,7 @@ export async function ensureFyiNotifyPage(page, appConfig = {}) {
  * True when at least one Preview button is still available.
  */
 export async function hasFyiPreview(page) {
+  await dismissOverlays(page);
   const preview = page.getByRole("button", { name: /Preview/i }).first();
   return preview.isVisible().catch(() => false);
 }
@@ -48,6 +59,8 @@ export async function hasFyiPreview(page) {
  * Preview → wait for detail → Resolve → Yes, Confirm
  */
 export async function resolveOneFyiNotify(page, selectors = {}) {
+  await dismissOverlays(page);
+
   const preview = page.getByRole("button", { name: /Preview/i }).first();
   await preview.waitFor({ state: "visible", timeout: 30000 });
   await clickStable(preview);
@@ -57,7 +70,7 @@ export async function resolveOneFyiNotify(page, selectors = {}) {
   await resolveBtn.waitFor({ state: "visible", timeout: 60000 });
   await resolveBtn.scrollIntoViewIfNeeded().catch(() => {});
   await sleep(400);
-  await clickStable(resolveBtn);
+  await clickStable(resolveBtn, { forceAfterMs: 4000 });
 
   // Confirmation: "Are you sure..." → Yes, Confirm
   // Prefer the known modal primary button id (avoids animation/stability flakes).
@@ -66,16 +79,52 @@ export async function resolveOneFyiNotify(page, selectors = {}) {
     .or(page.getByRole("button", { name: /Yes,\s*Confirm/i }))
     .first();
   await confirm.waitFor({ state: "visible", timeout: 30000 });
-  await sleep(300);
-  await clickStable(confirm, { forceAfterMs: 1500 });
+  await sleep(400);
+  await clickStable(confirm, { forceAfterMs: 2000 });
 
   // Wait for confirm modal / detail to close and list to return.
   await confirm.waitFor({ state: "hidden", timeout: 30000 }).catch(() => {});
   await resolveBtn.waitFor({ state: "hidden", timeout: 30000 }).catch(() => {});
-  await sleep(1000);
+  await dismissOverlays(page);
+  await sleep(800);
 
   // Ensure we're back on a list with cards (or empty).
   await page.getByText(/FYI NOTIFY/i).first().waitFor({ state: "visible", timeout: 30000 }).catch(() => {});
+}
+
+/**
+ * Close leftover confirm / action modals that block navigation.
+ */
+export async function dismissOverlays(page) {
+  for (let i = 0; i < 3; i += 1) {
+    const modal = page.locator("ngb-modal-window, .modal.show, [role='dialog']").first();
+    if (!(await modal.isVisible().catch(() => false))) {
+      break;
+    }
+
+    // Prefer confirming if we're mid-resolve (clears the item), else cancel/close.
+    const confirm = page
+      .locator("#modalShellPrimaryButton")
+      .or(page.getByRole("button", { name: /Yes,\s*Confirm/i }))
+      .first();
+    if (await confirm.isVisible().catch(() => false)) {
+      await confirm.click({ force: true }).catch(() => {});
+      await sleep(600);
+      continue;
+    }
+
+    const cancel = page
+      .getByRole("button", { name: /Cancel|Close|No/i })
+      .first();
+    if (await cancel.isVisible().catch(() => false)) {
+      await cancel.click({ force: true }).catch(() => {});
+      await sleep(400);
+      continue;
+    }
+
+    await page.keyboard.press("Escape").catch(() => {});
+    await sleep(400);
+  }
 }
 
 /**
