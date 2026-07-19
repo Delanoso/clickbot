@@ -31,14 +31,8 @@ export async function lookupDriverInWebfleet(page, selectors, truckNumber) {
   await search.press("Enter");
   await sleep(1500);
 
-  // Open the vehicle details panel from the list.
-  const row = page
-    .getByText(new RegExp(searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"))
-    .first();
-  try {
-    await row.waitFor({ state: "visible", timeout: 8000 });
-    await row.click();
-  } catch {
+  const opened = await openVehicleRow(page, searchTerm);
+  if (!opened) {
     return "";
   }
 
@@ -52,7 +46,7 @@ export async function lookupDriverInWebfleet(page, selectors, truckNumber) {
       });
       return cleanDriverName(raw);
     } catch {
-      return "";
+      // fall through to DOM reader
     }
   }
 
@@ -61,26 +55,104 @@ export async function lookupDriverInWebfleet(page, selectors, truckNumber) {
 }
 
 /**
+ * Click the vehicle list row that best matches the truck id (avoid AH2241 for H2241
+ * when a better match exists). If Webfleet returns a single filtered result, use it.
+ */
+async function openVehicleRow(page, searchTerm) {
+  const escaped = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  // 1) Exact id at start of label: "TH2239– Name"
+  const exact = page.getByText(new RegExp(`^\\s*${escaped}(?![A-Za-z0-9])`, "i")).first();
+  try {
+    await exact.waitFor({ state: "visible", timeout: 5000 });
+    await exact.click();
+    return true;
+  } catch {
+    // continue
+  }
+
+  // 2) Id as a prefix of the Webfleet vehicle code: "R2610MH– Name"
+  const prefix = page
+    .getByText(new RegExp(`^\\s*${escaped}[A-Za-z0-9]*\\b`, "i"))
+    .first();
+  try {
+    await prefix.waitFor({ state: "visible", timeout: 3000 });
+    await prefix.click();
+    return true;
+  } catch {
+    // continue
+  }
+
+  // 3) Single filtered search hit (e.g. searching H2241 only returns AH2241).
+  const singleHit = await page.evaluate((term) => {
+    const body = document.body?.innerText || "";
+    if (!/\bVEHICLES\s*\(\s*1\s*\//i.test(body)) return null;
+    const lines = body.split("\n").map((l) => l.trim()).filter(Boolean);
+    const hit = lines.find((line) => {
+      const id = line.split(/[–—-]/)[0].trim();
+      return new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(id);
+    });
+    return hit || null;
+  }, searchTerm);
+
+  if (singleHit) {
+    try {
+      await page.getByText(singleHit).first().click({ timeout: 5000 });
+      return true;
+    } catch {
+      // continue
+    }
+  }
+
+  // 4) Last resort: whole-word contains (may be ambiguous).
+  const loose = page.getByText(new RegExp(`(?<![A-Za-z0-9])${escaped}(?![A-Za-z0-9])`, "i")).first();
+  try {
+    await loose.waitFor({ state: "visible", timeout: 3000 });
+    await loose.click();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Read Webfleet details panel: section "DRIVER" → field "Name".
+ *
+ * Note: the DOM text is often "Driver" while CSS displays "DRIVER".
  */
 async function readDriverSectionName(page) {
   try {
     const raw = await page.evaluate(() => {
       const normalize = (s) => String(s || "").replace(/\s+/g, " ").trim();
+      const isDriverHeading = (s) => /^driver$/i.test(normalize(s));
 
-      // Find a visible heading whose text is exactly DRIVER.
-      const candidates = [...document.querySelectorAll("div, span, h1, h2, h3, label, strong, p")];
-      const heading = candidates.find((el) => {
-        const text = normalize(el.childNodes.length ? el.textContent : "");
-        // Prefer short nodes that are exactly "DRIVER" (section title).
-        return text === "DRIVER" && el.children.length === 0;
-      }) || candidates.find((el) => normalize(el.textContent) === "DRIVER");
+      // 1) Fast path: parse visible page text (CSS may uppercase labels).
+      const body = document.body?.innerText || "";
+      const bodyMatch = body.match(
+        /\bDRIVER\b\s*\n\s*Name\s*\n\s*([^\n]+)\s*\n\s*Cell\b/i
+      );
+      if (bodyMatch?.[1]) {
+        return bodyMatch[1].trim();
+      }
+
+      // 2) DOM walk: heading text is often "Driver", not "DRIVER".
+      const candidates = [
+        ...document.querySelectorAll("div, span, h1, h2, h3, label, strong, p"),
+      ];
+      const heading =
+        candidates.find((el) => {
+          const own = [...el.childNodes]
+            .filter((n) => n.nodeType === Node.TEXT_NODE)
+            .map((n) => n.textContent || "")
+            .join("");
+          return isDriverHeading(own) && el.children.length === 0;
+        }) ||
+        candidates.find((el) => isDriverHeading(el.textContent || ""));
 
       if (!heading) return "";
 
-      // Walk up to a reasonable panel container, then locate Name → value.
       let panel = heading.parentElement;
-      for (let i = 0; i < 6 && panel; i += 1) {
+      for (let i = 0; i < 8 && panel; i += 1) {
         const text = panel.innerText || "";
         if (/Name/i.test(text) && /Cell/i.test(text)) break;
         panel = panel.parentElement;
@@ -93,13 +165,11 @@ async function readDriverSectionName(page) {
         .map((line) => line.trim())
         .filter(Boolean);
 
-      // Expected shape near: DRIVER, Name, <value>, Cell, <phone>
       const driverIdx = lines.findIndex((line) => /^DRIVER$/i.test(line));
       const start = driverIdx >= 0 ? driverIdx : 0;
       for (let i = start; i < lines.length; i += 1) {
         if (/^Name$/i.test(lines[i]) && lines[i + 1]) {
           const value = lines[i + 1];
-          // Stop if we hit another label.
           if (/^(Cell|Details|Position|DRIVER)$/i.test(value)) return "";
           return value;
         }

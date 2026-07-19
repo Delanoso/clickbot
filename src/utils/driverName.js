@@ -64,8 +64,11 @@ export function cleanDriverName(rawName) {
     name = dashed[1].trim();
   }
 
-  // Strip phone numbers (keep names like "N/A" intact)
+  // Strip phone numbers (keep names like "N/A" intact).
+  // Handles SA local (083…), +27…, and other intl (+264…) forms.
   name = name
+    .replace(/(\+\d{1,3}[\d\s\-()]{6,}\d)/g, " ")
+    .replace(/(\b0\d[\d\s\-()]{6,}\d)/g, " ")
     .replace(/(\+?\d[\d\s\-()]{6,}\d)/g, " ")
     .replace(/\s+\/\s+/g, " ")
     .replace(/\s+/g, " ")
