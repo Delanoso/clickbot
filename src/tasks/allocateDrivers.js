@@ -50,7 +50,32 @@ export async function runAllocateDrivers(config) {
       }
 
       console.log(`--- Run ${run} ---`);
-      const result = await allocateOne(lytx, webfleet, config);
+      let result;
+      try {
+        result = await allocateOne(lytx, webfleet, config);
+      } catch (error) {
+        if (/empty/i.test(error.message || "")) {
+          console.log("Hit an empty vehicle row; checking whether the queue is done...");
+          await clearLytxVehicleFilter(lytx, config.apps.dispatch.selectors).catch(() => {});
+          if (!(await hasAssignableRows(lytx, config.apps.dispatch.selectors))) {
+            console.log("No more vehicles left in Assign Drivers. Done.");
+            break;
+          }
+          console.log(`Skipping empty row and continuing. (${error.message})`);
+          continue;
+        }
+        throw error;
+      }
+
+      if (!result.truckNumber) {
+        console.log("Empty truck number returned; stopping if queue is clear.");
+        if (!(await hasAssignableRows(lytx, config.apps.dispatch.selectors))) {
+          console.log("No more vehicles left in Assign Drivers. Done.");
+          break;
+        }
+        continue;
+      }
+
       let suffix = "";
       if (result.usedDropdownFallback) {
         suffix = " (fallback: not in Lytx dropdown → Driver Unknown)";
@@ -65,10 +90,13 @@ export async function runAllocateDrivers(config) {
         sameTruckStreak = 1;
         lastTruck = result.truckNumber;
       }
-      if (sameTruckStreak >= 5) {
-        throw new Error(
-          `Stuck on truck ${result.truckNumber} for ${sameTruckStreak} runs — stopping to avoid a loop.`
+      if (sameTruckStreak >= 3) {
+        console.log(
+          `Truck ${result.truckNumber} still at top after ${sameTruckStreak} assigns — forcing page refresh and continuing.`
         );
+        await lytx.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
+        await ensureLytxAssignPage(lytx, config.apps.dispatch);
+        sameTruckStreak = 0;
       }
 
       const delay = config.loop?.delayBetweenRunsMs ?? 2000;

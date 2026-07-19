@@ -65,7 +65,7 @@ function isOnWorkUrl(currentUrl, workUrl) {
 }
 
 /**
- * Read the vehicle/truck ID from the first data row in the Assign Drivers table.
+ * Read the vehicle/truck ID from the first non-empty data row.
  */
 export async function readFirstVehicle(page, selectors) {
   if (selectors.truckNumber) {
@@ -74,9 +74,17 @@ export async function readFirstVehicle(page, selectors) {
 
   const vehicleColumn =
     selectors.vehicleColumn || ".cdk-row.lytx-table-row .cdk-column-Vehicle";
-  const cell = page.locator(vehicleColumn).first();
-  await cell.waitFor({ state: "visible", timeout: 20000 });
-  return normalizeVehicle(await cell.innerText());
+  const cells = page.locator(vehicleColumn);
+  const count = await cells.count();
+  if (count === 0) {
+    return "";
+  }
+
+  for (let i = 0; i < count; i += 1) {
+    const value = normalizeVehicle(await cells.nth(i).innerText());
+    if (value) return value;
+  }
+  return "";
 }
 
 function normalizeVehicle(raw) {
