@@ -70,6 +70,7 @@ export function cleanDriverName(rawName) {
     .replace(/(\+\d{1,3}[\d\s\-()]{6,}\d)/g, " ")
     .replace(/(\b0\d[\d\s\-()]{6,}\d)/g, " ")
     .replace(/(\+?\d[\d\s\-()]{6,}\d)/g, " ")
+    .replace(/\/{2,}/g, " ")
     .replace(/\s+\/\s+/g, " ")
     .replace(/\s+/g, " ")
     .trim();

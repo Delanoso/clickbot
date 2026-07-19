@@ -44,6 +44,12 @@ assert(withIntl === "Sipha Khanyi", `should strip +27 phone, got: ${withIntl}`);
 const withNamibia = cleanDriverName("Gerson Shooya +264 81 383 3961");
 assert(withNamibia === "Gerson Shooya", `should strip +264 phone, got: ${withNamibia}`);
 
+const dualNoSpace = cleanDriverName("ANTONIO HAIPINGE +264817891716//063 074 9416");
+assert(
+  dualNoSpace === "ANTONIO HAIPINGE",
+  `should strip jammed dual phones, got: ${dualNoSpace}`
+);
+
 const withDashPhone = cleanDriverName("Jane Doe 083-879-3215");
 assert(withDashPhone === "Jane Doe", `should strip dashed phone, got: ${withDashPhone}`);
 
