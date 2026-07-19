@@ -3,6 +3,8 @@ import {
   dismissOverlays,
   ensureFyiNotifyPage,
   hasFyiPreview,
+  readFyiRemainingCount,
+  recoverFyiList,
   resolveOneFyiNotify,
 } from "../apps/lytxFyi.js";
 
@@ -13,7 +15,7 @@ import {
  * 1. Open FYI NOTIFY from the dashboard
  * 2. Click Preview on the first card
  * 3. Scroll to Resolve → Yes, Confirm
- * 4. Repeat until no Preview buttons remain
+ * 4. Repeat until remaining count is 0 (not just a brief empty Preview list)
  */
 export async function runFyiNotify(config) {
   const { browser, page } = await openLytxOnly(config);
@@ -28,6 +30,7 @@ export async function runFyiNotify(config) {
   const maxRuns = config.loop?.maxRuns ?? 0;
   let run = 0;
   let failStreak = 0;
+  let emptyStreak = 0;
 
   console.log("Lytx FYI Notify open. Starting resolve loop.");
   console.log(maxRuns > 0 ? `maxRuns=${maxRuns}` : "Running until no FYI Notify items remain.");
@@ -42,28 +45,60 @@ export async function runFyiNotify(config) {
       }
 
       if (!(await hasFyiPreview(page))) {
-        // Re-open list in case we landed elsewhere.
-        await ensureFyiNotifyPage(page, fyiConfig);
-        if (!(await hasFyiPreview(page))) {
-          console.log("No more FYI Notify Preview items. Done.");
+        const remaining = await readFyiRemainingCount(page);
+        if (remaining === 0) {
+          console.log("FYI Notify remaining count is 0. Done.");
           break;
         }
+
+        emptyStreak += 1;
+        console.log(
+          `No Preview buttons yet (remaining=${remaining ?? "?"}, emptyStreak=${emptyStreak}).`
+        );
+        const recovered = await recoverFyiList(page, fyiConfig);
+        if (!recovered) {
+          const after = await readFyiRemainingCount(page);
+          if (after === 0 || (emptyStreak >= 3 && !(await hasFyiPreview(page)))) {
+            console.log(
+              after === 0
+                ? "FYI Notify remaining count is 0. Done."
+                : "Still no Preview after refresh attempts — stopping."
+            );
+            break;
+          }
+        } else {
+          emptyStreak = 0;
+        }
+        if (!(await hasFyiPreview(page))) {
+          continue;
+        }
+      } else {
+        emptyStreak = 0;
       }
 
-      console.log(`--- FYI Run ${run} ---`);
+      const remainingBefore = await readFyiRemainingCount(page);
+      console.log(
+        `--- FYI Run ${run} ---${
+          remainingBefore != null ? ` (remaining ~${remainingBefore})` : ""
+        }`
+      );
       try {
         await resolveOneFyiNotify(page, selectors);
         failStreak = 0;
-        console.log("Resolved one FYI Notify event.");
+        const remainingAfter = await readFyiRemainingCount(page);
+        console.log(
+          `Resolved one FYI Notify event.${
+            remainingAfter != null ? ` Remaining ~${remainingAfter}.` : ""
+          }`
+        );
       } catch (error) {
         failStreak += 1;
         console.log(`FYI resolve failed (will retry): ${error.message || error}`);
-        // Recover UI and continue — one flaky confirm click should not stop the loop.
         try {
           await page.keyboard.press("Escape").catch(() => {});
           await sleep(500);
           await dismissOverlays(page);
-          await ensureFyiNotifyPage(page, fyiConfig);
+          await recoverFyiList(page, fyiConfig);
         } catch (recoverError) {
           console.log(`FYI UI recovery failed, reloading: ${recoverError.message || recoverError}`);
           await page.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
