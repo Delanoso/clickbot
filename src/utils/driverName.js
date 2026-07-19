@@ -1,5 +1,6 @@
 /**
- * Normalize and validate a driver name copied from Webfleet.
+ * Normalize and validate a driver id/name copied from Webfleet.
+ * Prefer Webfleet Drivers "No." (e.g. D3309); names still accepted.
  * Returns the default when the value is missing or not usable.
  */
 export function resolveDriverName(rawName, config) {

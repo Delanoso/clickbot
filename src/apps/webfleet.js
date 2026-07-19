@@ -1,200 +1,162 @@
 import { clickIfPresentFrom, locate } from "../locate.js";
-import { cleanDriverName } from "../utils/driverName.js";
 
 /**
- * Webfleet map page helpers.
- * Work URL: https://live-wf.webfleet.com/web/map
+ * Webfleet Drivers list helpers.
+ * Work URL: https://live-wf.webfleet.com/web/drivers/list
+ *
+ * Lookup: search by truck/vehicle id → read the matching row's "No." (driver id).
  */
 export async function ensureWebfleetMap(page, appConfig) {
-  const workUrl = appConfig.workUrl || "https://live-wf.webfleet.com/web/map";
-  if (!/live-wf\.webfleet\.com\/web\/map/i.test(page.url())) {
+  return ensureWebfleetDrivers(page, appConfig);
+}
+
+export async function ensureWebfleetDrivers(page, appConfig) {
+  const workUrl =
+    appConfig.workUrl || "https://live-wf.webfleet.com/web/drivers/list";
+  if (!/live-wf\.webfleet\.com\/web\/drivers/i.test(page.url())) {
     await page.goto(workUrl, { waitUntil: "domcontentloaded" });
   }
-  await page.getByText(/VEHICLES/i).first().waitFor({ timeout: 60000 }).catch(() => {});
+  await page.getByText(/DRIVERS/i).first().waitFor({ timeout: 60000 }).catch(() => {});
+  await sleep(800);
 }
 
 /**
- * Search a truck and return ONLY the name from the middle DRIVER → Name section.
- * Never use the header/list name under the truck number (e.g. "DRIVER" / "Phillip Mofokeng").
+ * Search the Drivers list by truck number and return the driver "No." (e.g. D3309).
+ * Does not return the Name column — Lytx assigns more reliably by driver id.
  */
 export async function lookupDriverInWebfleet(page, selectors, truckNumber) {
-  if (selectors.vehiclesTab) {
-    await clickIfPresentFrom(page, selectors.vehiclesTab, { timeout: 8000 });
-  } else {
-    await clickIfPresentFrom(page, { text: "VEHICLES" }, { timeout: 5000 });
+  // Ensure we are on Drivers (sidebar link) if still on map/login landing.
+  if (!/\/drivers/i.test(page.url())) {
+    const driversLink = page.locator('a[href*="/web/drivers"]').first();
+    if (await driversLink.count()) {
+      await driversLink.click().catch(() => {});
+      await page.waitForURL(/\/drivers/i, { timeout: 15000 }).catch(() => {});
+    } else {
+      await page.goto("https://live-wf.webfleet.com/web/drivers/list", {
+        waitUntil: "domcontentloaded",
+      });
+    }
+    await page.getByText(/DRIVERS/i).first().waitFor({ timeout: 30000 }).catch(() => {});
+    await sleep(800);
   }
 
-  const search = await resolveSearchInput(page, selectors);
-  await search.fill("", { force: true });
+  const search = await resolveDriversSearchInput(page, selectors);
   const searchTerm = String(truckNumber).split(/\s+[–—-]\s+|\s+/)[0];
+  await search.fill("", { force: true });
   await search.fill(searchTerm, { force: true });
   await search.press("Enter");
   await sleep(1500);
 
-  const opened = await openVehicleRow(page, searchTerm);
-  if (!opened) {
-    return "";
-  }
-
-  await sleep(1200);
-
-  // Explicit config selector for DRIVER → Name, if provided.
-  if (selectors.driverNameResult) {
+  if (selectors.driverNumberResult) {
     try {
-      const raw = await locate(page, selectors.driverNameResult).innerText({
+      const raw = await locate(page, selectors.driverNumberResult).innerText({
         timeout: 8000,
       });
-      return cleanDriverName(raw);
+      return normalizeDriverNo(raw);
     } catch {
-      // fall through to DOM reader
+      // fall through
     }
   }
 
-  // Only the middle DRIVER section. Do NOT fall back to header/list names.
-  return readDriverSectionName(page);
+  return readDriverNoFromTable(page, searchTerm);
 }
 
 /**
- * Click the vehicle list row that best matches the truck id (avoid AH2241 for H2241
- * when a better match exists). If Webfleet returns a single filtered result, use it.
+ * Read "No." from the Drivers table row whose Vehicle matches the truck id.
  */
-async function openVehicleRow(page, searchTerm) {
-  const escaped = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-  // 1) Exact id at start of label: "TH2239– Name"
-  const exact = page.getByText(new RegExp(`^\\s*${escaped}(?![A-Za-z0-9])`, "i")).first();
+async function readDriverNoFromTable(page, searchTerm) {
   try {
-    await exact.waitFor({ state: "visible", timeout: 5000 });
-    await exact.click();
-    return true;
-  } catch {
-    // continue
-  }
-
-  // 2) Id as a prefix of the Webfleet vehicle code: "R2610MH– Name"
-  const prefix = page
-    .getByText(new RegExp(`^\\s*${escaped}[A-Za-z0-9]*\\b`, "i"))
-    .first();
-  try {
-    await prefix.waitFor({ state: "visible", timeout: 3000 });
-    await prefix.click();
-    return true;
-  } catch {
-    // continue
-  }
-
-  // 3) Single filtered search hit (e.g. searching H2241 only returns AH2241).
-  const singleHit = await page.evaluate((term) => {
-    const body = document.body?.innerText || "";
-    if (!/\bVEHICLES\s*\(\s*1\s*\//i.test(body)) return null;
-    const lines = body.split("\n").map((l) => l.trim()).filter(Boolean);
-    const hit = lines.find((line) => {
-      const id = line.split(/[–—-]/)[0].trim();
-      return new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(id);
-    });
-    return hit || null;
-  }, searchTerm);
-
-  if (singleHit) {
-    try {
-      await page.getByText(singleHit).first().click({ timeout: 5000 });
-      return true;
-    } catch {
-      // continue
-    }
-  }
-
-  // 4) Last resort: whole-word contains (may be ambiguous).
-  const loose = page.getByText(new RegExp(`(?<![A-Za-z0-9])${escaped}(?![A-Za-z0-9])`, "i")).first();
-  try {
-    await loose.waitFor({ state: "visible", timeout: 3000 });
-    await loose.click();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Read Webfleet details panel: section "DRIVER" → field "Name".
- *
- * Note: the DOM text is often "Driver" while CSS displays "DRIVER".
- */
-async function readDriverSectionName(page) {
-  try {
-    const raw = await page.evaluate(() => {
+    const raw = await page.evaluate((term) => {
       const normalize = (s) => String(s || "").replace(/\s+/g, " ").trim();
-      const isDriverHeading = (s) => /^driver$/i.test(normalize(s));
+      const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const idRe = new RegExp(`(?:^|[^A-Za-z0-9])${escaped}(?![A-Za-z0-9])`, "i");
+      const prefixRe = new RegExp(`^\\s*${escaped}[A-Za-z0-9]*\\b`, "i");
 
-      // 1) Fast path: parse visible page text (CSS may uppercase labels).
-      const body = document.body?.innerText || "";
-      const bodyMatch = body.match(
-        /\bDRIVER\b\s*\n\s*Name\s*\n\s*([^\n]+)\s*\n\s*Cell\b/i
-      );
-      if (bodyMatch?.[1]) {
-        return bodyMatch[1].trim();
-      }
+      const table = document.querySelector("table");
+      const headers = table
+        ? [...table.querySelectorAll("thead th")].map((h) => normalize(h.innerText))
+        : [...document.querySelectorAll('[role="columnheader"]')].map((h) =>
+            normalize(h.innerText)
+          );
 
-      // 2) DOM walk: heading text is often "Driver", not "DRIVER".
-      const candidates = [
-        ...document.querySelectorAll("div, span, h1, h2, h3, label, strong, p"),
-      ];
-      const heading =
-        candidates.find((el) => {
-          const own = [...el.childNodes]
-            .filter((n) => n.nodeType === Node.TEXT_NODE)
-            .map((n) => n.textContent || "")
-            .join("");
-          return isDriverHeading(own) && el.children.length === 0;
-        }) ||
-        candidates.find((el) => isDriverHeading(el.textContent || ""));
+      let noIdx = headers.findIndex((h) => /^No\.?$/i.test(h));
+      let vehicleIdx = headers.findIndex((h) => /^Vehicle$/i.test(h));
+      // Headers often start with an empty avatar column.
+      if (noIdx < 0) noIdx = 2;
+      if (vehicleIdx < 0) vehicleIdx = 3;
 
-      if (!heading) return "";
+      const rowEls = table
+        ? [...table.querySelectorAll("tbody tr")]
+        : [...document.querySelectorAll('[role="row"]')].filter(
+            (r) => r.querySelectorAll('[role="cell"]').length > 2
+          );
 
-      let panel = heading.parentElement;
-      for (let i = 0; i < 8 && panel; i += 1) {
-        const text = panel.innerText || "";
-        if (/Name/i.test(text) && /Cell/i.test(text)) break;
-        panel = panel.parentElement;
-      }
-      if (!panel) panel = heading.parentElement;
-      if (!panel) return "";
+      const rows = rowEls.map((tr) => {
+        const cells = [
+          ...tr.querySelectorAll(table ? "td" : '[role="cell"]'),
+        ].map((c) => normalize(c.innerText));
+        return {
+          no: cells[noIdx] || "",
+          vehicle: cells[vehicleIdx] || "",
+          cells,
+        };
+      });
 
-      const lines = panel.innerText
-        .split(/\n/)
-        .map((line) => line.trim())
-        .filter(Boolean);
+      const scored = rows
+        .map((row) => {
+          const vehicleId = row.vehicle.split(/[–—-]/)[0].trim();
+          let score = 0;
+          if (new RegExp(`^${escaped}$`, "i").test(vehicleId)) score = 100;
+          else if (prefixRe.test(vehicleId)) score = 80;
+          else if (idRe.test(row.vehicle)) score = 60;
+          else if (row.cells.some((c) => idRe.test(c))) score = 20;
+          return { ...row, vehicleId, score };
+        })
+        .filter((r) => r.score > 0)
+        .sort((a, b) => b.score - a.score);
 
-      const driverIdx = lines.findIndex((line) => /^DRIVER$/i.test(line));
-      const start = driverIdx >= 0 ? driverIdx : 0;
-      for (let i = start; i < lines.length; i += 1) {
-        if (/^Name$/i.test(lines[i]) && lines[i + 1]) {
-          const value = lines[i + 1];
-          if (/^(Cell|Details|Position|DRIVER)$/i.test(value)) return "";
-          return value;
-        }
-      }
-      return "";
-    });
+      if (!scored.length) return "";
+      const best = scored[0];
+      const no = normalize(best.no);
+      // Driver numbers look like D3309 / DR3995 / ND1221 / Z2888
+      if (!no || /^—+$/.test(no)) return "";
+      return no;
+    }, searchTerm);
 
-    return cleanDriverName(raw);
+    return normalizeDriverNo(raw);
   } catch {
     return "";
   }
 }
 
-async function resolveSearchInput(page, selectors) {
+function normalizeDriverNo(raw) {
+  const value = String(raw || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!value || /^—+$/.test(value)) return "";
+  // Keep the id token only (first word), e.g. "D3309"
+  const token = value.split(/\s+/)[0];
+  if (!/^[A-Za-z]{0,4}\d{2,}$/i.test(token) && !/^[A-Za-z]+\d+/i.test(token)) {
+    // Still allow unusual ids; just reject obvious names-with-phones.
+    if (/\d{6,}/.test(value.replace(/\s/g, ""))) return "";
+  }
+  return token;
+}
+
+async function resolveDriversSearchInput(page, selectors) {
   if (selectors.searchInput) {
     const locator = locate(page, selectors.searchInput);
     try {
       await locator.waitFor({ state: "visible", timeout: 5000 });
       return locator;
     } catch {
-      // continue
+      // continue — pick a visible search field
     }
   }
 
-  const candidates = page.locator('input[type="search"], input[placeholder="Search"]');
+  const candidates = page.locator(
+    'input.t3sel-filterable-list-filter, input[type="search"], input[placeholder="Search"]'
+  );
   const count = await candidates.count();
   for (let i = 0; i < count; i += 1) {
     const candidate = candidates.nth(i);
@@ -203,7 +165,8 @@ async function resolveSearchInput(page, selectors) {
     }
   }
 
-  const forced = candidates.nth(Math.max(0, count - 1));
+  // Hidden duplicate search fields exist on this page — force the last one.
+  const forced = candidates.last();
   await forced.waitFor({ state: "attached", timeout: 10000 });
   return forced;
 }

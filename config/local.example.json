@@ -80,7 +80,7 @@
     },
     "fleet": {
       "url": "https://login.webfleet.com/auth/realms/webfleet/protocol/openid-connect/auth?response_type=code&client_id=atlantis&redirect_uri=https%3A%2F%2Flive-wf.webfleet.com%2Flogin%3FlogoutRedirect%3Dhttps%253A%252F%252Flive-wf.webfleet.com%252Fweb%252Fmap&state=3%28x0%2F%21%7E&scope=openid&brand_id=webfleet",
-      "workUrl": "https://live-wf.webfleet.com/web/map",
+      "workUrl": "https://live-wf.webfleet.com/web/drivers/list",
       "login": {
         "enabled": true,
         "manual": true,
@@ -97,9 +97,6 @@
         "timeoutMs": 300000
       },
       "selectors": {
-        "vehiclesTab": {
-          "text": "VEHICLES"
-        },
         "searchInput": {
           "placeholder": "Search"
         },

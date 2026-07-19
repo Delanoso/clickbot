@@ -3,86 +3,64 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Webfleet (demo)</title>
+    <title>Webfleet Drivers (demo)</title>
     <style>
       body {
         font-family: Georgia, "Times New Roman", serif;
         margin: 0;
         min-height: 100vh;
-        display: grid;
-        grid-template-columns: 20rem 1fr;
+        padding: 1.25rem;
         background: linear-gradient(145deg, #f3ebe2 0%, #e4eef1 50%, #dfe8dd 100%);
         color: #243028;
       }
-      aside { padding: 1.25rem; border-right: 1px solid #9aa79d; background: rgba(255,255,255,0.45); }
-      main { padding: 1.25rem; }
       h1 { font-size: 1.1rem; margin: 0 0 0.75rem; }
-      input { width: 100%; box-sizing: border-box; padding: 0.55rem 0.7rem; font: inherit; }
-      .tabs { display: flex; gap: 0.75rem; margin-bottom: 0.75rem; }
-      .tabs button { font: inherit; border: 0; background: transparent; cursor: pointer; opacity: 0.6; }
-      .tabs button.active { opacity: 1; font-weight: 700; text-decoration: underline; }
-      .list-item { padding: 0.7rem 0; border-bottom: 1px solid #c5d0c7; cursor: pointer; }
-      .list-item strong { display: block; }
-      .panel { background: rgba(255,255,255,0.7); padding: 1rem; max-width: 24rem; }
-      .panel h2 { margin: 0 0 0.5rem; font-size: 1.1rem; }
-      .muted { opacity: 0.7; font-size: 0.85rem; }
+      input { width: 16rem; box-sizing: border-box; padding: 0.55rem 0.7rem; font: inherit; margin-bottom: 1rem; }
+      table { width: 100%; max-width: 52rem; border-collapse: collapse; background: rgba(255,255,255,0.7); }
+      th, td { text-align: left; padding: 0.55rem 0.7rem; border-bottom: 1px solid #c5d0c7; }
+      th { font-size: 0.85rem; }
     </style>
   </head>
   <body>
-    <aside>
-      <div class="tabs">
-        <button type="button" class="active" id="tab-vehicles">VEHICLES</button>
-        <button type="button" id="tab-assets">ASSETS</button>
-      </div>
-      <input id="search" type="text" placeholder="Search" autocomplete="off" />
-      <div id="results"></div>
-    </aside>
-    <main>
-      <div class="panel" id="details" hidden>
-        <h2 id="detail-title"></h2>
-        <div class="muted">DRIVER</div>
-        <div><span class="muted">Name</span></div>
-        <div id="driver-name"></div>
-      </div>
-    </main>
+    <h1>DRIVERS</h1>
+    <input id="search" type="search" placeholder="Search" autocomplete="off" />
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>Name</th>
+          <th>No.</th>
+          <th>Vehicle</th>
+          <th>Activity</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
     <script>
       const fleet = {
-        "T-1001": { listName: "Alex Rivera", driver: "Alex Rivera" },
-        "T-1002": { listName: "Not In Directory", driver: "Not In Directory 083 111 2222" },
-        "T-1003": { listName: "N/A", driver: "N/A" },
+        "T-1001": { name: "Alex Rivera", no: "D1001", vehicle: "T-1001 – Alex Rivera" },
+        "T-1002": { name: "Not In Directory 083 111 2222", no: "D1002", vehicle: "T-1002 – NO DRIVER" },
+        "T-1003": { name: "N/A", no: "—", vehicle: "T-1003 – N/A" },
       };
 
       const search = document.getElementById("search");
-      const results = document.getElementById("results");
-      const details = document.getElementById("details");
-      const detailTitle = document.getElementById("detail-title");
-      const driverName = document.getElementById("driver-name");
+      const rows = document.getElementById("rows");
 
       function runSearch() {
         const q = search.value.trim().toUpperCase();
-        results.innerHTML = "";
-        details.hidden = true;
+        rows.innerHTML = "";
         for (const [id, info] of Object.entries(fleet)) {
-          if (!id.includes(q) && q !== "") continue;
+          if (q && !id.includes(q) && !info.vehicle.toUpperCase().includes(q)) continue;
           if (!q) continue;
-          const item = document.createElement("div");
-          item.className = "list-item";
-          item.innerHTML = `<strong>${id} - ${info.listName}</strong><span class="muted">demo location</span>`;
-          item.addEventListener("click", () => {
-            detailTitle.textContent = `${id} - ${info.listName}`;
-            driverName.textContent = info.driver;
-            details.hidden = false;
-          });
-          results.appendChild(item);
+          const tr = document.createElement("tr");
+          tr.innerHTML = `<td></td><td>${info.name}</td><td>${info.no}</td><td>${info.vehicle}</td><td>Work</td>`;
+          rows.appendChild(tr);
         }
-        // Auto-open single match
-        if (results.children.length === 1) results.children[0].click();
       }
 
-      search.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") runSearch();
-      });
       search.addEventListener("input", runSearch);
+      search.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") runSearch();
+      });
     </script>
   </body>
 </html>

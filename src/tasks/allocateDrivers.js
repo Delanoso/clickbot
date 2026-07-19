@@ -18,8 +18,8 @@ import { resolveDriverName, shouldForceDefaultDriver } from "../utils/driverName
  * Flow (one iteration):
  * 1. Lytx Assign Drivers — read first VEHICLE id
  *    - If blank → assign Driver Unknown (no Webfleet)
- * 2. Webfleet — search vehicle, copy DRIVER name (or "Driver Unknown")
- * 3. Lytx — filter that vehicle, open Assign modal, paste name, confirm
+ * 2. Webfleet Drivers list — search vehicle, copy driver No. (e.g. D3309)
+ * 3. Lytx — filter that vehicle, open Assign modal, paste No. (or "Driver Unknown")
  */
 export async function runAllocateDrivers(config) {
   const { browser, pages } = await openApps(config);
@@ -175,7 +175,7 @@ async function allocateOne(lytx, webfleet, config) {
     };
   }
 
-  // 2) Webfleet lookup — skip Sold / LDV / accident (always Driver Unknown).
+  // 2) Webfleet Drivers list — skip Sold / LDV / accident (always Driver Unknown).
   // Demo trucks are looked up in Webfleet like normal vehicles.
   let driverName;
   let usedFallback = false;
@@ -191,13 +191,13 @@ async function allocateOne(lytx, webfleet, config) {
   } else {
     await webfleet.bringToFront();
     await ensureWebfleetMap(webfleet, config.apps.fleet);
-    const rawDriverName = await lookupDriverInWebfleet(
+    const rawDriverId = await lookupDriverInWebfleet(
       webfleet,
       fleetSel,
       truckNumber
     );
     ({ name: driverName, usedFallback, reason } = resolveDriverName(
-      rawDriverName,
+      rawDriverId,
       config
     ));
   }
