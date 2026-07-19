@@ -29,8 +29,11 @@ export async function runAllocateDrivers(config) {
 
   const maxRuns = config.loop?.maxRuns ?? 0;
   let run = 0;
+  let lastTruck = null;
+  let sameTruckStreak = 0;
 
-  console.log("Lytx + Webfleet open. Starting driver allocation loop.");
+  console.log("Lytx + Webfleet open. Starting full driver allocation loop.");
+  console.log(maxRuns > 0 ? `maxRuns=${maxRuns}` : "Running until the Assign Drivers queue is empty.");
   console.log("Press Ctrl+C to stop.\n");
 
   try {
@@ -38,6 +41,11 @@ export async function runAllocateDrivers(config) {
       run += 1;
       if (maxRuns > 0 && run > maxRuns) {
         console.log(`Reached maxRuns (${maxRuns}). Stopping.`);
+        break;
+      }
+
+      if (!(await hasAssignableRows(lytx, config.apps.dispatch.selectors))) {
+        console.log("No more vehicles left in Assign Drivers. Done.");
         break;
       }
 
@@ -51,6 +59,18 @@ export async function runAllocateDrivers(config) {
       }
       console.log(`Truck ${result.truckNumber} -> ${result.driverName}${suffix}`);
 
+      if (result.truckNumber === lastTruck) {
+        sameTruckStreak += 1;
+      } else {
+        sameTruckStreak = 1;
+        lastTruck = result.truckNumber;
+      }
+      if (sameTruckStreak >= 5) {
+        throw new Error(
+          `Stuck on truck ${result.truckNumber} for ${sameTruckStreak} runs — stopping to avoid a loop.`
+        );
+      }
+
       const delay = config.loop?.delayBetweenRunsMs ?? 2000;
       if (delay > 0) {
         await sleep(delay);
@@ -59,6 +79,13 @@ export async function runAllocateDrivers(config) {
   } finally {
     await browser.close();
   }
+}
+
+async function hasAssignableRows(page, selectors) {
+  const vehicleColumn =
+    selectors.vehicleColumn || ".cdk-row.lytx-table-row .cdk-column-Vehicle";
+  const count = await page.locator(vehicleColumn).count();
+  return count > 0;
 }
 
 async function allocateOne(lytx, webfleet, config) {
