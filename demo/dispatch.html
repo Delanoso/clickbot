@@ -118,13 +118,24 @@
       });
 
       driverSearch.addEventListener("input", () => {
-        const value = driverSearch.value.trim();
-        if (!value) {
+        const value = driverSearch.value.trim().toLowerCase();
+        const directory = [
+          "Alex Rivera",
+          "Sam Okonkwo",
+          "Driver Unknown",
+        ];
+        const matches = directory.filter((name) =>
+          name.toLowerCase().includes(value)
+        );
+        if (!value || matches.length === 0) {
           suggestions.hidden = true;
+          suggestions.innerHTML = "";
           return;
         }
         suggestions.hidden = false;
-        suggestions.innerHTML = `<div role="option">${value.toUpperCase()} | DEMO</div>`;
+        suggestions.innerHTML = matches
+          .map((name) => `<div role="option">${name.toUpperCase()} | DEMO</div>`)
+          .join("");
       });
       suggestions.addEventListener("click", (event) => {
         const option = event.target.closest("[role=option]");

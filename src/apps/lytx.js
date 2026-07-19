@@ -98,8 +98,14 @@ export async function filterLytxByVehicle(page, selectors, truckNumber) {
 
 /**
  * Select visible rows and open the Assign Driver modal, then paste the driver name.
+ * If the looked-up name is not in the Lytx dropdown, assign "Driver Unknown" instead.
  */
-export async function assignDriverInLytx(page, selectors, driverName) {
+export async function assignDriverInLytx(
+  page,
+  selectors,
+  driverName,
+  { defaultDriverName = "Driver Unknown" } = {}
+) {
   // Select all visible rows when a header/select-all checkbox is configured.
   if (selectors.selectAllCheckbox) {
     await clickIfPresentFrom(page, selectors.selectAllCheckbox, { timeout: 5000 });
@@ -119,19 +125,20 @@ export async function assignDriverInLytx(page, selectors, driverName) {
 
   const inputSel =
     selectors.driverNameInput || { placeholder: "Search Name or ID" };
-  await fillFrom(page, inputSel, driverName);
 
-  // Choose matching suggestion when Lytx offers one (e.g. "SIPHA KHANYI | DT3862").
-  const suggestion = page
-    .locator('[role="option"], [role="listbox"] *, mat-option, .mat-mdc-option')
-    .filter({ hasText: new RegExp(driverName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") })
-    .first();
+  let assignedName = driverName;
+  let usedDropdownFallback = false;
 
-  try {
-    await suggestion.waitFor({ state: "visible", timeout: 4000 });
-    await suggestion.click();
-  } catch {
-    // Driver Unknown (or exact typed name) may not have a suggestion.
+  const picked = await pickDriverFromDropdown(page, inputSel, driverName);
+  if (!picked) {
+    assignedName = defaultDriverName;
+    usedDropdownFallback = driverName.toLowerCase() !== defaultDriverName.toLowerCase();
+    const fallbackPicked = await pickDriverFromDropdown(page, inputSel, defaultDriverName);
+    if (!fallbackPicked) {
+      throw new Error(
+        `Could not select "${defaultDriverName}" from the Lytx Assign Driver dropdown.`
+      );
+    }
   }
 
   const confirm =
@@ -159,6 +166,26 @@ export async function assignDriverInLytx(page, selectors, driverName) {
     await locate(page, inputSel).waitFor({ state: "hidden", timeout: 15000 });
   } catch {
     // Some builds keep the field briefly; continue.
+  }
+
+  return { assignedName, usedDropdownFallback };
+}
+
+async function pickDriverFromDropdown(page, inputSel, driverName) {
+  await fillFrom(page, inputSel, driverName);
+
+  const escaped = driverName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const suggestion = page
+    .locator('[role="option"], [role="listbox"] *, mat-option, .mat-mdc-option')
+    .filter({ hasText: new RegExp(escaped, "i") })
+    .first();
+
+  try {
+    await suggestion.waitFor({ state: "visible", timeout: 4000 });
+    await suggestion.click();
+    return true;
+  } catch {
+    return false;
   }
 }
 

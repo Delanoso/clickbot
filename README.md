@@ -33,7 +33,7 @@ The bot keeps **both apps open** and loops this flow:
 1. **Lytx** `Assign Drivers` — read truck id from the **VEHICLE** column (e.g. `TH2239`)
 2. **Webfleet** map — search that truck under **VEHICLES**, open it, copy **DRIVER → Name** (phones stripped)
 3. **Lytx** — filter/select that vehicle’s events, open **Assign Driver**, paste into **Search Name or ID**, click **Assign**
-4. If Webfleet has no usable name → paste **`Driver Unknown`**
+4. If Webfleet has no usable name, **or the name is not in the Lytx dropdown** → select **`Driver Unknown`** (it is in the dropdown) and assign that
 
 ## Quick test (demo apps)
 
@@ -48,7 +48,7 @@ npm run demo
 Expected results:
 
 - `T-1001` → Alex Rivera
-- `T-1002` → Sam Okonkwo
+- `T-1002` → Driver Unknown (name not in Lytx dropdown)
 - `T-1003` → Driver Unknown (fleet returns `N/A`)
 - `T-404` → Driver Unknown (no driver found)
 

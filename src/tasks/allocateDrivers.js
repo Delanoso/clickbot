@@ -43,10 +43,13 @@ export async function runAllocateDrivers(config) {
 
       console.log(`--- Run ${run} ---`);
       const result = await allocateOne(lytx, webfleet, config);
-      console.log(
-        `Truck ${result.truckNumber} -> ${result.driverName}` +
-          (result.usedFallback ? ` (fallback: ${result.reason})` : "")
-      );
+      let suffix = "";
+      if (result.usedDropdownFallback) {
+        suffix = " (fallback: not in Lytx dropdown → Driver Unknown)";
+      } else if (result.usedFallback) {
+        suffix = ` (fallback: ${result.reason})`;
+      }
+      console.log(`Truck ${result.truckNumber} -> ${result.driverName}${suffix}`);
 
       const delay = config.loop?.delayBetweenRunsMs ?? 2000;
       if (delay > 0) {
@@ -82,10 +85,18 @@ async function allocateOne(lytx, webfleet, config) {
   // 3) Lytx: filter this vehicle, assign driver via modal
   await lytx.bringToFront();
   await filterLytxByVehicle(lytx, lytxSel, truckNumber);
-  await assignDriverInLytx(lytx, lytxSel, driverName);
+  const assignResult = await assignDriverInLytx(lytx, lytxSel, driverName, {
+    defaultDriverName: config.defaultDriverName || "Driver Unknown",
+  });
   await clearLytxVehicleFilter(lytx, lytxSel);
 
-  return { truckNumber, driverName, usedFallback, reason };
+  return {
+    truckNumber,
+    driverName: assignResult.assignedName,
+    usedFallback: usedFallback || assignResult.usedDropdownFallback,
+    usedDropdownFallback: assignResult.usedDropdownFallback,
+    reason: assignResult.usedDropdownFallback ? "not_in_dropdown" : reason,
+  };
 }
 
 function sleep(ms) {
