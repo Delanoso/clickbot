@@ -22,12 +22,18 @@ The bot keeps **both apps open** and loops this flow:
 
 ### Progress
 
-- [x] App 1 URL: Lytx (`https://login.lytx.com`)
-- [x] App 2 URL: Webfleet login
+- [x] App 1 URL: Lytx (`https://login.lytx.com` → Assign Drivers)
+- [x] App 2 URL: Webfleet (`live-wf.webfleet.com/web/map`)
 - [x] Login forms for both apps
-- [ ] App 1 (Lytx): where truck number is shown after login
-- [ ] App 1 (Lytx): where to paste the driver name
-- [ ] App 2 (Webfleet): search box + driver name result selectors
+- [x] Workflow from screenshots: read VEHICLE → Webfleet DRIVER name → Lytx Assign modal
+- [ ] Live selector fine-tuning after first real run (Angular/Material DOM can vary)
+
+### Real workflow (from your screenshots)
+
+1. **Lytx** `Assign Drivers` — read truck id from the **VEHICLE** column (e.g. `TH2239`)
+2. **Webfleet** map — search that truck under **VEHICLES**, open it, copy **DRIVER → Name** (phones stripped)
+3. **Lytx** — filter/select that vehicle’s events, open **Assign Driver**, paste into **Search Name or ID**, click **Assign**
+4. If Webfleet has no usable name → paste **`Driver Unknown`**
 
 ## Quick test (demo apps)
 
@@ -55,7 +61,7 @@ cp config/local.example.json config/local.json
 cp .env.example .env   # optional, for automated Lytx login
 ```
 
-Open Lytx so you can log in and inspect the page (selectors still TBD):
+Open both apps (manual login by default):
 
 ```bash
 npm run explore
@@ -66,22 +72,20 @@ With `login.manual: true` (default), the browser opens **Lytx** and **Webfleet**
 - Lytx: `LYTX_USERNAME`, `LYTX_PASSWORD`
 - Webfleet: `WEBFLEET_ACCOUNT`, `WEBFLEET_USERNAME`, `WEBFLEET_PASSWORD`
 
-Edit `config/local.json` with the remaining selectors:
+`config/local.example.json` is already filled from your screenshots. Key fields:
 
 | Field | Purpose |
 | --- | --- |
-| `apps.dispatch.url` | First web app (truck list / allocation) |
-| `apps.dispatch.selectors.truckNumber` | Where the truck number is shown |
-| `apps.dispatch.selectors.driverNameInput` | Where to type the driver name |
-| `apps.dispatch.selectors.submitButton` | Optional save/submit button |
-| `apps.dispatch.selectors.nextItemButton` | Optional control to move to next truck |
-| `apps.fleet.url` | Second web app (driver lookup) |
-| `apps.fleet.selectors.searchInput` | Search box for the truck number |
-| `apps.fleet.selectors.searchButton` | Optional search button (uses Enter if empty) |
-| `apps.fleet.selectors.driverNameResult` | Where the driver name appears |
-| `apps.fleet.selectors.resultReady` | Optional element that means results loaded |
+| `apps.dispatch.workUrl` | Lytx Assign Drivers page |
+| `apps.dispatch.selectors.firstVehicleCell` | VEHICLE column cell to read |
+| `apps.dispatch.selectors.vehicleSearchInput` | Filter by vehicle (`Search Vehicle Name`) |
+| `apps.dispatch.selectors.assignSelectedButton` | Opens bulk Assign Driver modal |
+| `apps.dispatch.selectors.driverNameInput` | Modal field `Search Name or ID` |
+| `apps.fleet.workUrl` | Webfleet map |
+| `apps.fleet.selectors.searchInput` | Vehicles search box |
+| `apps.fleet.selectors.driverNameResult` | Optional; otherwise DRIVER Name is auto-detected |
 
-Tip: in Chrome, right-click an element → Inspect → right-click the DOM node → Copy → Copy selector.
+Tip: if a click misses in the real apps, right-click the element → Inspect → Copy selector and put it in `config/local.json`.
 
 ## Run
 

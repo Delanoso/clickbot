@@ -1,5 +1,5 @@
 /**
- * Normalize and validate a driver name copied from the fleet app.
+ * Normalize and validate a driver name copied from Webfleet.
  * Returns the default when the value is missing or not usable.
  */
 export function resolveDriverName(rawName, config) {
@@ -15,7 +15,7 @@ export function resolveDriverName(rawName, config) {
     return { name: fallback, usedFallback: true, reason: "empty" };
   }
 
-  const name = String(rawName).replace(/\s+/g, " ").trim();
+  let name = cleanDriverName(rawName);
 
   if (!name) {
     return { name: fallback, usedFallback: true, reason: "empty" };
@@ -30,4 +30,29 @@ export function resolveDriverName(rawName, config) {
   }
 
   return { name, usedFallback: false, reason: null };
+}
+
+/**
+ * Webfleet often returns:
+ * - "TH2239 - Phillip Mofokeng"
+ * - "Sipha Khanyi 083 879 3215 / 063 735 0503"
+ */
+export function cleanDriverName(rawName) {
+  let name = String(rawName).replace(/\s+/g, " ").trim();
+  if (!name) return "";
+
+  // "VEHICLE - Driver Name" list format
+  const dashed = name.match(/^[A-Z0-9]+(?:\s*-\s*)(.+)$/i);
+  if (dashed) {
+    name = dashed[1].trim();
+  }
+
+  // Strip phone numbers (keep names like "N/A" intact)
+  name = name
+    .replace(/(\+?\d[\d\s\-()]{6,}\d)/g, " ")
+    .replace(/\s+\/\s+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return name;
 }

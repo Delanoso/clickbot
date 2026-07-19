@@ -67,15 +67,20 @@ function validateConfig(config, { relax = false } = {}) {
       missing.push("apps.fleet.url");
     }
 
-    for (const key of ["truckNumber", "driverNameInput"]) {
-      if (!dispatch?.selectors?.[key]) {
-        missing.push(`apps.dispatch.selectors.${key}`);
-      }
+    const hasVehicleTarget =
+      dispatch?.selectors?.truckNumber ||
+      dispatch?.selectors?.firstVehicleCell ||
+      dispatch?.selectors?.vehicleColumnIndex != null;
+    if (!hasVehicleTarget) {
+      missing.push("apps.dispatch.selectors.firstVehicleCell (or truckNumber)");
     }
-    for (const key of ["searchInput", "driverNameResult"]) {
-      if (!fleet?.selectors?.[key]) {
-        missing.push(`apps.fleet.selectors.${key}`);
-      }
+
+    if (!dispatch?.selectors?.driverNameInput) {
+      missing.push("apps.dispatch.selectors.driverNameInput");
+    }
+
+    if (!fleet?.selectors?.searchInput) {
+      missing.push("apps.fleet.selectors.searchInput");
     }
   }
 

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Dispatch App (demo)</title>
+    <title>Lytx Assign Drivers (demo)</title>
     <style>
       body {
         font-family: Georgia, "Times New Roman", serif;
@@ -12,105 +12,145 @@
         background: linear-gradient(160deg, #e8f1f4 0%, #f7f3ea 55%, #dde7df 100%);
         color: #1d2a2e;
       }
-      main {
-        max-width: 40rem;
-        margin: 0 auto;
-        padding: 3rem 1.5rem;
-      }
-      h1 {
-        font-size: 2rem;
-        margin: 0 0 0.5rem;
-      }
-      p {
-        margin: 0 0 2rem;
-        opacity: 0.8;
-      }
-      label {
-        display: block;
-        margin: 1rem 0 0.35rem;
-        font-size: 0.9rem;
-      }
-      #truck-number {
-        font-size: 1.75rem;
-        font-weight: 700;
-        letter-spacing: 0.04em;
-      }
-      input {
-        width: 100%;
-        box-sizing: border-box;
-        padding: 0.7rem 0.8rem;
-        font: inherit;
-        border: 1px solid #7a8b90;
-        background: rgba(255, 255, 255, 0.7);
-      }
-      .actions {
-        display: flex;
-        gap: 0.75rem;
-        margin-top: 1.25rem;
-      }
-      button {
-        font: inherit;
-        padding: 0.65rem 1rem;
-        border: 1px solid #1d2a2e;
-        background: #1d2a2e;
-        color: #f7f3ea;
-        cursor: pointer;
-      }
-      button.secondary {
-        background: transparent;
-        color: #1d2a2e;
-      }
-      #log {
-        margin-top: 2rem;
-        white-space: pre-wrap;
-        font-family: ui-monospace, monospace;
-        font-size: 0.85rem;
-      }
+      main { max-width: 56rem; margin: 0 auto; padding: 2rem 1.5rem; }
+      h1 { margin: 0 0 1rem; }
+      .filters { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+      input, button { font: inherit; padding: 0.55rem 0.8rem; }
+      table { width: 100%; border-collapse: collapse; background: rgba(255,255,255,0.65); }
+      th, td { text-align: left; padding: 0.6rem; border-bottom: 1px solid #b7c4c8; }
+      button.primary { background: #1d4f91; color: #fff; border: 0; cursor: pointer; }
+      dialog { border: 1px solid #7a8b90; padding: 1.25rem; width: min(24rem, 92vw); }
+      #log { margin-top: 1rem; font-family: ui-monospace, monospace; white-space: pre-wrap; font-size: 0.85rem; }
+      .suggestions { border: 1px solid #7a8b90; background: #fff; margin-top: 0.25rem; }
+      .suggestions div { padding: 0.4rem 0.6rem; cursor: pointer; }
     </style>
   </head>
   <body>
     <main>
-      <h1>Dispatch</h1>
-      <p>Demo board for allocating a driver to the current truck.</p>
-
-      <label>Truck number</label>
-      <div id="truck-number">T-1001</div>
-
-      <label for="driver-name">Driver name</label>
-      <input id="driver-name" type="text" autocomplete="off" />
-
-      <div class="actions">
-        <button id="submit" type="button">Save allocation</button>
-        <button id="next-truck" class="secondary" type="button">Next truck</button>
+      <h1>ASSIGN DRIVERS</h1>
+      <div class="filters">
+        <input id="vehicle-search" type="text" placeholder="Search Vehicle Name" />
+        <button id="assign-selected" class="primary" type="button">Assign Selected</button>
       </div>
-
+      <table>
+        <thead>
+          <tr>
+            <th><input id="select-all" type="checkbox" /></th>
+            <th>SNAPSHOT</th>
+            <th>VEHICLE</th>
+            <th>TRIGGER</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
       <div id="log"></div>
     </main>
 
-    <script>
-      const trucks = ["T-1001", "T-1002", "T-1003", "T-404"];
-      let index = 0;
-      const truckEl = document.getElementById("truck-number");
-      const driverInput = document.getElementById("driver-name");
-      const logEl = document.getElementById("log");
+    <dialog id="assign-modal">
+      <h2>Assign Driver</h2>
+      <p id="modal-count">events will be assigned.</p>
+      <input id="driver-search" type="text" placeholder="Search Name or ID" autocomplete="off" />
+      <div id="suggestions" class="suggestions" hidden></div>
+      <div style="margin-top:1rem; display:flex; gap:0.5rem; justify-content:flex-end;">
+        <button id="cancel-assign" type="button">Cancel</button>
+        <button id="confirm-assign" class="primary" type="button">Assign</button>
+      </div>
+    </dialog>
 
-      function renderTruck() {
-        truckEl.textContent = trucks[index];
-        driverInput.value = "";
+    <script>
+      const allRows = [
+        { vehicle: "T-1001", trigger: "Cornering" },
+        { vehicle: "T-1001", trigger: "Handheld Device" },
+        { vehicle: "T-1002", trigger: "Cornering" },
+        { vehicle: "T-1003", trigger: "Cornering" },
+        { vehicle: "T-404", trigger: "Cornering" },
+      ];
+      let filter = "";
+      const rowsEl = document.getElementById("rows");
+      const logEl = document.getElementById("log");
+      const modal = document.getElementById("assign-modal");
+      const driverSearch = document.getElementById("driver-search");
+      const suggestions = document.getElementById("suggestions");
+
+      function visibleRows() {
+        return allRows.filter((row) => !filter || row.vehicle.toUpperCase().includes(filter.toUpperCase()));
       }
 
-      document.getElementById("submit").addEventListener("click", () => {
-        const truck = truckEl.textContent;
-        const driver = driverInput.value.trim() || "(empty)";
-        logEl.textContent += `Saved ${truck} -> ${driver}\n`;
+      function render() {
+        const rows = visibleRows();
+        rowsEl.innerHTML = rows
+          .map(
+            (row, index) => `
+          <tr data-vehicle="${row.vehicle}">
+            <td><input type="checkbox" class="row-check" checked /></td>
+            <td>Preview</td>
+            <td>${row.vehicle}</td>
+            <td>${row.trigger}</td>
+            <td><button class="primary row-assign" type="button" data-index="${index}">Assign</button></td>
+          </tr>`
+          )
+          .join("");
+      }
+
+      function openModal() {
+        const count = visibleRows().length;
+        document.getElementById("modal-count").textContent = `${count} events will be assigned.`;
+        driverSearch.value = "";
+        suggestions.hidden = true;
+        modal.showModal();
+      }
+
+      document.getElementById("vehicle-search").addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          filter = event.target.value.trim();
+          render();
+        }
+      });
+      document.getElementById("vehicle-search").addEventListener("change", (event) => {
+        filter = event.target.value.trim();
+        render();
       });
 
-      document.getElementById("next-truck").addEventListener("click", () => {
-        index = (index + 1) % trucks.length;
-        renderTruck();
+      document.getElementById("assign-selected").addEventListener("click", openModal);
+      rowsEl.addEventListener("click", (event) => {
+        if (event.target.classList.contains("row-assign")) openModal();
       });
 
-      renderTruck();
+      driverSearch.addEventListener("input", () => {
+        const value = driverSearch.value.trim();
+        if (!value) {
+          suggestions.hidden = true;
+          return;
+        }
+        suggestions.hidden = false;
+        suggestions.innerHTML = `<div role="option">${value.toUpperCase()} | DEMO</div>`;
+      });
+      suggestions.addEventListener("click", (event) => {
+        const option = event.target.closest("[role=option]");
+        if (!option) return;
+        driverSearch.value = option.textContent;
+        suggestions.hidden = true;
+      });
+
+      document.getElementById("confirm-assign").addEventListener("click", () => {
+        const name = driverSearch.value.trim() || "(empty)";
+        const vehicles = [...new Set(visibleRows().map((r) => r.vehicle))];
+        logEl.textContent += `Assigned ${vehicles.join(", ")} -> ${name}\n`;
+        // Remove assigned vehicles from queue
+        for (const vehicle of vehicles) {
+          for (let i = allRows.length - 1; i >= 0; i -= 1) {
+            if (allRows[i].vehicle === vehicle) allRows.splice(i, 1);
+          }
+        }
+        filter = "";
+        document.getElementById("vehicle-search").value = "";
+        modal.close();
+        render();
+      });
+      document.getElementById("cancel-assign").addEventListener("click", () => modal.close());
+
+      render();
     </script>
   </body>
 </html>

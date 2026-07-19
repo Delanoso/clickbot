@@ -30,10 +30,10 @@ async function main() {
   console.log("\nApps are open.");
   console.log(`Lytx (dispatch): ${pages.dispatch.url()}`);
   console.log(`Webfleet (fleet): ${pages.fleet.url()}`);
-  console.log("Log in on both tabs if needed, then tell me:");
-  console.log("  1) Lytx: where the truck number appears");
-  console.log("  2) Lytx: where to paste the driver name");
-  console.log("  3) Webfleet: where to search the truck + where the driver name shows");
+  console.log("Log in on both tabs if needed.");
+  console.log("Expected work pages after login:");
+  console.log("  Lytx:     Assign Drivers");
+  console.log("  Webfleet: Map / Vehicles search");
   console.log("\nPress Ctrl+C when finished.\n");
 
   await new Promise(() => {});

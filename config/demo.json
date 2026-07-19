@@ -10,20 +10,27 @@
   "apps": {
     "dispatch": {
       "url": "http://127.0.0.1:4173/dispatch",
+      "workUrl": "http://127.0.0.1:4173/dispatch",
+      "login": { "enabled": false },
       "selectors": {
-        "truckNumber": "#truck-number",
-        "driverNameInput": "#driver-name",
-        "submitButton": "#submit",
-        "nextItemButton": "#next-truck"
+        "pageReady": { "text": "ASSIGN DRIVERS" },
+        "firstVehicleCell": "table tbody tr:first-child td:nth-child(3)",
+        "vehicleSearchInput": { "placeholder": "Search Vehicle Name" },
+        "selectAllCheckbox": "#select-all",
+        "assignSelectedButton": { "role": "button", "name": "Assign Selected" },
+        "rowAssignButton": { "role": "button", "name": "Assign", "exact": true },
+        "driverNameInput": { "placeholder": "Search Name or ID" },
+        "assignConfirmButton": "#confirm-assign"
       }
     },
     "fleet": {
       "url": "http://127.0.0.1:4173/fleet",
+      "workUrl": "http://127.0.0.1:4173/fleet",
+      "login": { "enabled": false },
       "selectors": {
-        "searchInput": "#search",
-        "searchButton": "#search-button",
-        "driverNameResult": "#driver-name",
-        "resultReady": "#results:not([hidden])"
+        "vehiclesTab": { "text": "VEHICLES" },
+        "searchInput": { "placeholder": "Search" },
+        "driverNameResult": "#driver-name"
       }
     }
   }

@@ -21,11 +21,21 @@ export async function openApps(config) {
     waitUntil: "domcontentloaded",
   });
   await maybeLogin(dispatchPage, config.apps.dispatch, "dispatch");
+  if (config.apps.dispatch.workUrl) {
+    await dispatchPage.goto(config.apps.dispatch.workUrl, {
+      waitUntil: "domcontentloaded",
+    });
+  }
 
   const fleetUrl = config.apps.fleet?.url;
   if (fleetUrl && !String(fleetUrl).includes("example.com")) {
     await fleetPage.goto(fleetUrl, { waitUntil: "domcontentloaded" });
     await maybeLogin(fleetPage, config.apps.fleet, "fleet");
+    if (config.apps.fleet.workUrl) {
+      await fleetPage.goto(config.apps.fleet.workUrl, {
+        waitUntil: "domcontentloaded",
+      });
+    }
   } else {
     console.log("[fleet] URL not configured yet — leaving second tab blank.");
   }

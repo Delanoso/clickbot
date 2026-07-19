@@ -10,6 +10,7 @@
   "apps": {
     "dispatch": {
       "url": "https://login.lytx.com",
+      "workUrl": "https://app.lytx.com/#/driver-safety/tasks/assigndriver",
       "login": {
         "enabled": true,
         "manual": true,
@@ -19,18 +20,23 @@
         "passwordSelector": "#password",
         "submitSelector": "#submit-button",
         "rememberMeSelector": "#remember-me-input",
-        "successUrlPattern": "^(?!.*login\\.lytx\\.com).+",
+        "successUrlPattern": "app\\.lytx\\.com|^(?!.*login\\.lytx\\.com).+",
         "timeoutMs": 300000
       },
       "selectors": {
-        "truckNumber": "",
-        "driverNameInput": "",
-        "submitButton": "",
-        "nextItemButton": ""
+        "pageReady": { "text": "ASSIGN DRIVERS" },
+        "firstVehicleCell": "table tbody tr:first-child td:nth-child(3)",
+        "vehicleSearchInput": { "placeholder": "Search Vehicle Name" },
+        "selectAllCheckbox": "table thead input[type='checkbox']",
+        "assignSelectedButton": { "role": "button", "name": "Assign Selected" },
+        "rowAssignButton": { "role": "button", "name": "Assign", "exact": true },
+        "driverNameInput": { "placeholder": "Search Name or ID" },
+        "assignConfirmButton": { "role": "button", "name": "Assign", "exact": true }
       }
     },
     "fleet": {
       "url": "https://www.webfleet.com/webfleet/products/login/?application=webfleet",
+      "workUrl": "https://live-wf.webfleet.com/web/map",
       "login": {
         "enabled": true,
         "manual": true,
@@ -47,10 +53,8 @@
         "timeoutMs": 300000
       },
       "selectors": {
-        "searchInput": "",
-        "searchButton": "",
-        "driverNameResult": "",
-        "resultReady": ""
+        "vehiclesTab": { "text": "VEHICLES" },
+        "searchInput": { "placeholder": "Search" }
       }
     }
   },

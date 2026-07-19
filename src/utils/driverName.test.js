@@ -1,4 +1,4 @@
-import { resolveDriverName } from "./driverName.js";
+import { cleanDriverName, resolveDriverName } from "./driverName.js";
 
 const config = {
   defaultDriverName: "Driver Unknown",
@@ -27,5 +27,11 @@ assert(invalid.name === "Driver Unknown", "N/A should fall back");
 
 const missing = resolveDriverName(null, config);
 assert(missing.name === "Driver Unknown", "null should fall back");
+
+const fromList = cleanDriverName("TH2239 - Phillip Mofokeng");
+assert(fromList === "Phillip Mofokeng", "should strip vehicle id prefix");
+
+const withPhones = cleanDriverName("Sipha Khanyi 083 879 3215 / 063 735 0503");
+assert(withPhones === "Sipha Khanyi", `should strip phones, got: ${withPhones}`);
 
 console.log("driverName tests passed");
