@@ -41,8 +41,8 @@ export function cleanDriverName(rawName) {
   let name = String(rawName).replace(/\s+/g, " ").trim();
   if (!name) return "";
 
-  // "VEHICLE - Driver Name" list format
-  const dashed = name.match(/^[A-Z0-9]+(?:\s*-\s*)(.+)$/i);
+  // "VEHICLE - Driver Name" / "VEHICLE – Driver Name" list format
+  const dashed = name.match(/^[A-Z0-9]+(?:\s*[–—-]\s*)(.+)$/i);
   if (dashed) {
     name = dashed[1].trim();
   }

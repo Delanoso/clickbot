@@ -21,11 +21,8 @@ export async function openApps(config) {
     waitUntil: "domcontentloaded",
   });
   await maybeLogin(dispatchPage, config.apps.dispatch, "dispatch");
-  if (config.apps.dispatch.workUrl) {
-    await dispatchPage.goto(config.apps.dispatch.workUrl, {
-      waitUntil: "domcontentloaded",
-    });
-  }
+  // Do not deep-link immediately — Lytx often redirects hash routes to dashboard.
+  // ensureLytxAssignPage() opens Assign Drivers via the UNASSIGNED DRIVERS tile.
 
   const fleetUrl = config.apps.fleet?.url;
   if (fleetUrl && !String(fleetUrl).includes("example.com")) {

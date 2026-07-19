@@ -12,20 +12,44 @@ import {
  */
 export async function ensureLytxAssignPage(page, appConfig) {
   const workUrl = appConfig.workUrl;
-  if (!workUrl) return;
+  const selectors = appConfig.selectors || {};
 
-  if (!isOnWorkUrl(page.url(), workUrl)) {
-    await page.goto(workUrl, { waitUntil: "domcontentloaded" });
+  // Deep links often bounce to the dashboard — open Assign Drivers from the tile.
+  if (!isOnAssignDrivers(page.url())) {
+    if (workUrl && !page.url().includes("app.lytx.com")) {
+      await page.goto(workUrl, { waitUntil: "domcontentloaded" });
+    }
+
+    if (!isOnAssignDrivers(page.url())) {
+      const tile =
+        selectors.openAssignTile || { text: "UNASSIGNED DRIVERS" };
+      try {
+        await locate(page, tile).waitFor({ state: "visible", timeout: 90000 });
+        await clickFrom(page, tile);
+        await page.waitForURL(/assigndriver/, { timeout: 60000 });
+      } catch {
+        if (workUrl) {
+          await page.goto(workUrl, { waitUntil: "domcontentloaded" });
+        }
+      }
+    }
   }
 
-  const heading = locate(page, appConfig.selectors.pageReady || { text: "ASSIGN DRIVERS" });
+  const heading = locate(page, selectors.pageReady || { text: "ASSIGN DRIVERS" });
   await heading.waitFor({ state: "visible", timeout: 60000 });
+  await page
+    .locator(selectors.vehicleColumn || ".cdk-row.lytx-table-row .cdk-column-Vehicle")
+    .first()
+    .waitFor({ state: "visible", timeout: 60000 });
+}
+
+function isOnAssignDrivers(url) {
+  return /assigndriver/i.test(url);
 }
 
 function isOnWorkUrl(currentUrl, workUrl) {
   if (!workUrl) return true;
   if (currentUrl === workUrl) return true;
-
   try {
     const current = new URL(currentUrl);
     const work = new URL(workUrl);
@@ -45,55 +69,93 @@ function isOnWorkUrl(currentUrl, workUrl) {
  */
 export async function readFirstVehicle(page, selectors) {
   if (selectors.truckNumber) {
-    return readTextFrom(page, selectors.truckNumber);
+    return normalizeVehicle(await readTextFrom(page, selectors.truckNumber));
   }
 
-  // Prefer an explicit first-row vehicle cell when provided.
-  if (selectors.firstVehicleCell) {
-    return readTextFrom(page, selectors.firstVehicleCell);
-  }
-
-  // Fallback: first body cell under a VEHICLE header-style layout used in demos/real UI.
-  const cell = page.locator("table tbody tr").first().locator("td").nth(selectors.vehicleColumnIndex ?? 2);
+  const vehicleColumn =
+    selectors.vehicleColumn || ".cdk-row.lytx-table-row .cdk-column-Vehicle";
+  const cell = page.locator(vehicleColumn).first();
   await cell.waitFor({ state: "visible", timeout: 20000 });
-  return (await cell.innerText()).replace(/\s+/g, " ").trim();
+  return normalizeVehicle(await cell.innerText());
+}
+
+function normalizeVehicle(raw) {
+  return String(raw || "")
+    .replace(/^Vehicle/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 /**
  * Filter the Assign Drivers list to one vehicle (bulk-assign that truck's events).
  */
 export async function filterLytxByVehicle(page, selectors, truckNumber) {
-  if (selectors.vehicleSearchType) {
-    await clickIfPresentFrom(page, selectors.vehicleSearchType, { timeout: 5000 });
-    await clickIfPresentFrom(page, selectors.vehicleSearchTypeOption || { text: "Vehicle" }, {
-      timeout: 5000,
-    });
+  // Open "Select Search" dropdown and choose Vehicle (skip if already Vehicle).
+  const searchDropdown = page
+    .locator('[data-test-id="dropdown-select-span"]')
+    .filter({ hasText: /Select Search|Vehicle/i })
+    .first();
+  const current = ((await searchDropdown.innerText().catch(() => "")) || "").trim();
+  if (!/^Vehicle$/i.test(current)) {
+    await searchDropdown.click();
+    await sleep(600);
+    const vehicleOption = page
+      .locator(
+        '[data-test-id="common-dropDownList-itemSpan-0"], .dropdown__list__item'
+      )
+      .filter({ hasText: /Vehicle/i })
+      .first();
+    await vehicleOption.waitFor({ state: "visible", timeout: 10000 });
+    await vehicleOption.click();
+    await sleep(500);
   }
 
-  if (!selectors.vehicleSearchInput) {
-    return;
+  const input = page.locator('[data-test-id="typeahead-search-input"], input[placeholder="Search Vehicle Name"]').first();
+  await input.waitFor({ state: "visible", timeout: 10000 });
+  for (let i = 0; i < 20; i += 1) {
+    if (await input.isEnabled()) break;
+    await sleep(200);
   }
+  await input.fill("");
+  await input.fill(String(truckNumber));
+  await sleep(1000);
 
-  await fillFrom(page, selectors.vehicleSearchInput, truckNumber);
-
-  // Prefer an autocomplete panel suggestion; avoid clicking the table cell with the same text.
   const suggestion = page
-    .locator('[role="listbox"] *, [role="option"], .cdk-overlay-pane *, .mat-mdc-option')
-    .filter({ hasText: new RegExp(`^${truckNumber.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") })
+    .locator("button.dropdown-item, .dropdown-item")
+    .filter({
+      hasText: new RegExp(
+        `^\\s*${truckNumber.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`,
+        "i"
+      ),
+    })
     .first();
 
   try {
-    await suggestion.waitFor({ state: "visible", timeout: 2500 });
+    await suggestion.waitFor({ state: "visible", timeout: 4000 });
     await suggestion.click();
   } catch {
-    await locate(page, selectors.vehicleSearchInput).press("Enter");
+    await input.press("Enter");
   }
 
   if (selectors.vehicleSearchButton) {
     await clickIfPresentFrom(page, selectors.vehicleSearchButton, { timeout: 3000 });
   }
 
-  await sleep(800);
+  // Wait until visible rows are only this vehicle (best-effort).
+  await sleep(1500);
+  const vehicles = await page
+    .locator(".cdk-row.lytx-table-row .cdk-column-Vehicle")
+    .allTextContents();
+  const normalized = vehicles.map((v) =>
+    String(v).replace(/^Vehicle/i, "").trim()
+  );
+  if (normalized.length && !normalized.every((v) => v === truckNumber)) {
+    console.log(
+      `[lytx] warning: filter may be incomplete for ${truckNumber}: ${normalized
+        .slice(0, 5)
+        .join(", ")}`
+    );
+  }
 }
 
 /**
@@ -106,18 +168,44 @@ export async function assignDriverInLytx(
   driverName,
   { defaultDriverName = "Driver Unknown" } = {}
 ) {
-  // Select all visible rows when a header/select-all checkbox is configured.
-  if (selectors.selectAllCheckbox) {
+  // Custom Lytx checkboxes are <i id="assignDriverCheckbox"> icons, not inputs.
+  const boxes = page.locator("#assignDriverCheckbox, i.lx-checkbox-inactive");
+  const boxCount = await boxes.count();
+  if (boxCount > 0) {
+    for (let i = 0; i < boxCount; i += 1) {
+      const box = boxes.nth(i);
+      const className = (await box.getAttribute("class")) || "";
+      if (/inactive/i.test(className) && (await box.isVisible().catch(() => false))) {
+        await box.click({ force: true });
+      }
+    }
+    await sleep(300);
+  } else if (selectors.selectAllCheckbox) {
     await clickIfPresentFrom(page, selectors.selectAllCheckbox, { timeout: 5000 });
   }
 
-  const opened =
-    (await clickIfPresentFrom(page, selectors.assignSelectedButton || { role: "button", name: "Assign Selected" }, {
-      timeout: 5000,
-    })) ||
-    (await clickIfPresentFrom(page, selectors.rowAssignButton || { role: "button", name: "Assign", exact: true }, {
-      timeout: 5000,
-    }));
+  const batch = page.locator("#batchAssignButton");
+  let opened = false;
+  if (await batch.isVisible().catch(() => false)) {
+    if (await batch.isEnabled().catch(() => false)) {
+      await batch.click();
+      opened = true;
+    }
+  }
+
+  if (!opened) {
+    opened =
+      (await clickIfPresentFrom(
+        page,
+        selectors.assignSelectedButton || { role: "button", name: "Assign Selected" },
+        { timeout: 3000 }
+      )) ||
+      (await clickIfPresentFrom(
+        page,
+        selectors.rowAssignButton || { role: "button", name: "Assign", exact: true },
+        { timeout: 5000 }
+      ));
+  }
 
   if (!opened) {
     throw new Error("Could not open Assign Driver modal (Assign Selected / Assign).");
@@ -132,8 +220,13 @@ export async function assignDriverInLytx(
   const picked = await pickDriverFromDropdown(page, inputSel, driverName);
   if (!picked) {
     assignedName = defaultDriverName;
-    usedDropdownFallback = driverName.toLowerCase() !== defaultDriverName.toLowerCase();
-    const fallbackPicked = await pickDriverFromDropdown(page, inputSel, defaultDriverName);
+    usedDropdownFallback =
+      driverName.toLowerCase() !== defaultDriverName.toLowerCase();
+    const fallbackPicked = await pickDriverFromDropdown(
+      page,
+      inputSel,
+      defaultDriverName
+    );
     if (!fallbackPicked) {
       throw new Error(
         `Could not select "${defaultDriverName}" from the Lytx Assign Driver dropdown.`
@@ -158,14 +251,18 @@ export async function assignDriverInLytx(
         .click();
     }
   } else {
-    await clickFrom(page, confirm);
+    // Modal may not expose dialog role — click the enabled Assign in the modal footer.
+    const modalAssign = page
+      .locator("button")
+      .filter({ hasText: /^Assign$/ })
+      .last();
+    await modalAssign.click();
   }
 
-  // Wait for modal to close.
   try {
     await locate(page, inputSel).waitFor({ state: "hidden", timeout: 15000 });
   } catch {
-    // Some builds keep the field briefly; continue.
+    // continue
   }
 
   return { assignedName, usedDropdownFallback };
@@ -176,7 +273,9 @@ async function pickDriverFromDropdown(page, inputSel, driverName) {
 
   const escaped = driverName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const suggestion = page
-    .locator('[role="option"], [role="listbox"] *, mat-option, .mat-mdc-option')
+    .locator(
+      '[role="option"], [role="listbox"] *, mat-option, .mat-mdc-option, .cdk-overlay-pane *'
+    )
     .filter({ hasText: new RegExp(escaped, "i") })
     .first();
 
@@ -198,6 +297,14 @@ export async function clearLytxVehicleFilter(page, selectors) {
     return;
   }
 
+  // Reset filters button when present.
+  const reset = page.getByRole("button", { name: /^Reset$/i }).first();
+  if (await reset.isVisible().catch(() => false)) {
+    await reset.click();
+    await sleep(1000);
+    return;
+  }
+
   if (selectors.vehicleSearchInput) {
     const input = locate(page, selectors.vehicleSearchInput);
     try {
@@ -212,3 +319,5 @@ export async function clearLytxVehicleFilter(page, selectors) {
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+export { isOnWorkUrl };

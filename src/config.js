@@ -70,6 +70,7 @@ function validateConfig(config, { relax = false } = {}) {
     const hasVehicleTarget =
       dispatch?.selectors?.truckNumber ||
       dispatch?.selectors?.firstVehicleCell ||
+      dispatch?.selectors?.vehicleColumn ||
       dispatch?.selectors?.vehicleColumnIndex != null;
     if (!hasVehicleTarget) {
       missing.push("apps.dispatch.selectors.firstVehicleCell (or truckNumber)");

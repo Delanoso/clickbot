@@ -27,18 +27,14 @@
         "pageReady": {
           "text": "ASSIGN DRIVERS"
         },
-        "firstVehicleCell": "table tbody tr:first-child td:nth-child(3)",
-        "vehicleColumnIndex": 2,
-        "vehicleSearchType": null,
-        "vehicleSearchTypeOption": {
-          "text": "Vehicle"
-        },
+        "vehicleSearchType": "[data-test-id=\"dropdown-select-span\"]",
+        "vehicleSearchTypeOption": "[data-test-id=\"common-dropDownList-item-0\"]",
         "vehicleSearchInput": {
           "placeholder": "Search Vehicle Name"
         },
         "vehicleSearchButton": null,
         "clearVehicleSearch": null,
-        "selectAllCheckbox": "table thead input[type='checkbox']",
+        "selectAllCheckbox": ".cdk-header-row input[type=\"checkbox\"]",
         "assignSelectedButton": {
           "role": "button",
           "name": "Assign Selected"
@@ -55,7 +51,11 @@
           "role": "button",
           "name": "Assign",
           "exact": true
-        }
+        },
+        "openAssignTile": {
+          "text": "UNASSIGNED DRIVERS"
+        },
+        "vehicleColumn": ".cdk-row.lytx-table-row .cdk-column-Vehicle"
       }
     },
     "fleet": {
