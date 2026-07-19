@@ -93,7 +93,11 @@
       "null",
       "undefined",
       "-",
-      "--"
+      "--",
+      "driver",
+      "no driver",
+      "none",
+      "unknown"
     ]
   }
 }

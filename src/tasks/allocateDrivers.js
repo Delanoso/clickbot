@@ -94,11 +94,28 @@ export async function runAllocateDrivers(config) {
       }
       if (sameTruckStreak >= 3) {
         console.log(
-          `Truck ${result.truckNumber} still at top after ${sameTruckStreak} assigns — forcing page refresh and continuing.`
+          `Truck ${result.truckNumber} still at top after ${sameTruckStreak} assigns — forcing Driver Unknown once, then continuing.`
         );
-        await lytx.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
-        await ensureLytxAssignPage(lytx, config.apps.dispatch);
+        try {
+          await clearLytxVehicleFilter(lytx, config.apps.dispatch.selectors);
+          await filterLytxByVehicle(lytx, config.apps.dispatch.selectors, result.truckNumber);
+          await assignDriverInLytx(
+            lytx,
+            config.apps.dispatch.selectors,
+            config.defaultDriverName || "Driver Unknown",
+            {
+              defaultDriverName: config.defaultDriverName || "Driver Unknown",
+              truckNumber: result.truckNumber,
+            }
+          );
+          await clearLytxVehicleFilter(lytx, config.apps.dispatch.selectors);
+        } catch (error) {
+          console.log(`Forced Driver Unknown failed for ${result.truckNumber}: ${error.message}`);
+          await lytx.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
+          await ensureLytxAssignPage(lytx, config.apps.dispatch);
+        }
         sameTruckStreak = 0;
+        lastTruck = null;
       }
 
       const delay = config.loop?.delayBetweenRunsMs ?? 2000;

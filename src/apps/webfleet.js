@@ -1,8 +1,4 @@
-import {
-  clickIfPresentFrom,
-  fillFrom,
-  locate,
-} from "../locate.js";
+import { clickIfPresentFrom, locate } from "../locate.js";
 import { cleanDriverName } from "../utils/driverName.js";
 
 /**
@@ -18,7 +14,8 @@ export async function ensureWebfleetMap(page, appConfig) {
 }
 
 /**
- * Search a truck/vehicle and return the driver name from the list / DRIVER panel.
+ * Search a truck and return ONLY the name from the middle DRIVER → Name section.
+ * Never use the header/list name under the truck number (e.g. "DRIVER" / "Phillip Mofokeng").
  */
 export async function lookupDriverInWebfleet(page, selectors, truckNumber) {
   if (selectors.vehiclesTab) {
@@ -28,18 +25,15 @@ export async function lookupDriverInWebfleet(page, selectors, truckNumber) {
   }
 
   const search = await resolveSearchInput(page, selectors);
-  await search.fill("");
-  // Use leading id token so "H2110 - Sold" still finds H2110 in Webfleet.
+  await search.fill("", { force: true });
   const searchTerm = String(truckNumber).split(/\s+[–—-]\s+|\s+/)[0];
-  await search.fill(searchTerm);
+  await search.fill(searchTerm, { force: true });
   await search.press("Enter");
   await sleep(1500);
 
-  // Click matching list row if present.
+  // Open the vehicle details panel from the list.
   const row = page
-    .getByText(
-      new RegExp(searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i")
-    )
+    .getByText(new RegExp(searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"))
     .first();
   try {
     await row.waitFor({ state: "visible", timeout: 8000 });
@@ -48,8 +42,9 @@ export async function lookupDriverInWebfleet(page, selectors, truckNumber) {
     return "";
   }
 
-  await sleep(1000);
+  await sleep(1200);
 
+  // Explicit config selector for DRIVER → Name, if provided.
   if (selectors.driverNameResult) {
     try {
       const raw = await locate(page, selectors.driverNameResult).innerText({
@@ -57,38 +52,62 @@ export async function lookupDriverInWebfleet(page, selectors, truckNumber) {
       });
       return cleanDriverName(raw);
     } catch {
-      // fall through
+      return "";
     }
   }
 
-  // Prefer DRIVER section Name value when the details panel is open.
+  // Only the middle DRIVER section. Do NOT fall back to header/list names.
+  return readDriverSectionName(page);
+}
+
+/**
+ * Read Webfleet details panel: section "DRIVER" → field "Name".
+ */
+async function readDriverSectionName(page) {
   try {
-    const driverLabel = page.getByText(/^DRIVER$/i).first();
-    if (await driverLabel.isVisible({ timeout: 2000 })) {
-      const panelText = await driverLabel
-        .locator("xpath=ancestor::*[contains(@class,'panel') or self::section or self::div][1]")
-        .innerText();
-      const nameLine = panelText.match(/Name\s*\n?\s*([^\n]+)/i);
-      if (nameLine?.[1]) {
-        return cleanDriverName(nameLine[1]);
+    const raw = await page.evaluate(() => {
+      const normalize = (s) => String(s || "").replace(/\s+/g, " ").trim();
+
+      // Find a visible heading whose text is exactly DRIVER.
+      const candidates = [...document.querySelectorAll("div, span, h1, h2, h3, label, strong, p")];
+      const heading = candidates.find((el) => {
+        const text = normalize(el.childNodes.length ? el.textContent : "");
+        // Prefer short nodes that are exactly "DRIVER" (section title).
+        return text === "DRIVER" && el.children.length === 0;
+      }) || candidates.find((el) => normalize(el.textContent) === "DRIVER");
+
+      if (!heading) return "";
+
+      // Walk up to a reasonable panel container, then locate Name → value.
+      let panel = heading.parentElement;
+      for (let i = 0; i < 6 && panel; i += 1) {
+        const text = panel.innerText || "";
+        if (/Name/i.test(text) && /Cell/i.test(text)) break;
+        panel = panel.parentElement;
       }
-    }
-  } catch {
-    // fall through
-  }
+      if (!panel) panel = heading.parentElement;
+      if (!panel) return "";
 
-  // Fallback: list label "H2118 – Driver Name" or "H2118 - Driver Name"
-  try {
-    const listText = await page
-      .getByText(
-        new RegExp(
-          `${truckNumber.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*[–-]\\s*.+`,
-          "i"
-        )
-      )
-      .first()
-      .innerText({ timeout: 5000 });
-    return cleanDriverName(listText.replace(/[–—]/g, "-"));
+      const lines = panel.innerText
+        .split(/\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      // Expected shape near: DRIVER, Name, <value>, Cell, <phone>
+      const driverIdx = lines.findIndex((line) => /^DRIVER$/i.test(line));
+      const start = driverIdx >= 0 ? driverIdx : 0;
+      for (let i = start; i < lines.length; i += 1) {
+        if (/^Name$/i.test(lines[i]) && lines[i + 1]) {
+          const value = lines[i + 1];
+          // Stop if we hit another label.
+          if (/^(Cell|Details|Position|DRIVER)$/i.test(value)) return "";
+          return value;
+        }
+      }
+      return "";
+    });
+
+    return cleanDriverName(raw);
   } catch {
     return "";
   }
@@ -101,7 +120,7 @@ async function resolveSearchInput(page, selectors) {
       await locator.waitFor({ state: "visible", timeout: 5000 });
       return locator;
     } catch {
-      // continue to fallbacks
+      // continue
     }
   }
 
@@ -114,8 +133,7 @@ async function resolveSearchInput(page, selectors) {
     }
   }
 
-  // Last resort: fill the first search input even if Playwright considers it hidden.
-  const forced = candidates.first();
+  const forced = candidates.nth(Math.max(0, count - 1));
   await forced.waitFor({ state: "attached", timeout: 10000 });
   return forced;
 }

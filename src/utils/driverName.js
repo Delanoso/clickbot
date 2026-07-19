@@ -21,7 +21,7 @@ export function resolveDriverName(rawName, config) {
     return { name: fallback, usedFallback: true, reason: "empty" };
   }
 
-  if (invalid.has(name.toLowerCase())) {
+  if (invalid.has(name.toLowerCase()) || isPlaceholderDriverName(name)) {
     return { name: fallback, usedFallback: true, reason: "invalid" };
   }
 
@@ -72,4 +72,13 @@ export function cleanDriverName(rawName) {
     .trim();
 
   return name;
+}
+
+/** Placeholders that mean "no real driver" in Webfleet. */
+export function isPlaceholderDriverName(name) {
+  const value = String(name || "").replace(/\s+/g, " ").trim().toLowerCase();
+  return (
+    !value ||
+    /^(driver|no driver|none|unknown|n\/a|na|-|--)$/i.test(value)
+  );
 }

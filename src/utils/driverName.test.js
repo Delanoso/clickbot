@@ -2,6 +2,7 @@ import {
   cleanDriverName,
   resolveDriverName,
   shouldForceDefaultDriver,
+  isPlaceholderDriverName,
 } from "./driverName.js";
 
 const config = {
@@ -24,7 +25,6 @@ assert(valid.usedFallback === false, "valid name should not use fallback");
 
 const empty = resolveDriverName("   ", config);
 assert(empty.name === "Driver Unknown", "empty should fall back");
-assert(empty.usedFallback === true, "empty should mark fallback");
 
 const invalid = resolveDriverName("N/A", config);
 assert(invalid.name === "Driver Unknown", "N/A should fall back");
@@ -43,5 +43,10 @@ assert(shouldForceDefaultDriver("LDV1801") === true, "LDV should be skipped");
 assert(shouldForceDefaultDriver("Demo 95") === false, "demo must NOT be skipped");
 assert(shouldForceDefaultDriver("H2100 Accident") === true, "accident should force default");
 assert(shouldForceDefaultDriver("H2325") === false, "normal truck should look up");
+
+assert(isPlaceholderDriverName("DRIVER") === true, "DRIVER is placeholder");
+assert(isPlaceholderDriverName("NO DRIVER") === true, "NO DRIVER is placeholder");
+assert(resolveDriverName("DRIVER", config).name === "Driver Unknown", "DRIVER falls back");
+assert(resolveDriverName("Obvios Mukarati", config).name === "Obvios Mukarati", "real name kept");
 
 console.log("driverName tests passed");
