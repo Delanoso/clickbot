@@ -26,6 +26,7 @@ export async function runFyiNotify(config) {
 
   const maxRuns = config.loop?.maxRuns ?? 0;
   let run = 0;
+  let failStreak = 0;
 
   console.log("Lytx FYI Notify open. Starting resolve loop.");
   console.log(maxRuns > 0 ? `maxRuns=${maxRuns}` : "Running until no FYI Notify items remain.");
@@ -49,8 +50,23 @@ export async function runFyiNotify(config) {
       }
 
       console.log(`--- FYI Run ${run} ---`);
-      await resolveOneFyiNotify(page, selectors);
-      console.log("Resolved one FYI Notify event.");
+      try {
+        await resolveOneFyiNotify(page, selectors);
+        failStreak = 0;
+        console.log("Resolved one FYI Notify event.");
+      } catch (error) {
+        failStreak += 1;
+        console.log(`FYI resolve failed (will retry): ${error.message || error}`);
+        // Recover UI and continue — one flaky confirm click should not stop the loop.
+        await page.keyboard.press("Escape").catch(() => {});
+        await sleep(800);
+        await ensureFyiNotifyPage(page, fyiConfig);
+        if (failStreak >= 5) {
+          console.log("FYI resolve failed 5 times in a row — stopping.");
+          break;
+        }
+        continue;
+      }
 
       const delay = config.loop?.delayBetweenRunsMs ?? 800;
       if (delay > 0) {

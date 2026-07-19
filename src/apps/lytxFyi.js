@@ -50,21 +50,24 @@ export async function hasFyiPreview(page) {
 export async function resolveOneFyiNotify(page, selectors = {}) {
   const preview = page.getByRole("button", { name: /Preview/i }).first();
   await preview.waitFor({ state: "visible", timeout: 30000 });
-  await preview.click();
+  await clickStable(preview);
 
   // Detail view / modal with Resolve
   const resolveBtn = page.getByRole("button", { name: /^Resolve$/i }).first();
   await resolveBtn.waitFor({ state: "visible", timeout: 60000 });
-
-  // Scroll the detail panel so Resolve is in view.
   await resolveBtn.scrollIntoViewIfNeeded().catch(() => {});
   await sleep(400);
-  await resolveBtn.click();
+  await clickStable(resolveBtn);
 
   // Confirmation: "Are you sure..." → Yes, Confirm
-  const confirm = page.getByRole("button", { name: /Yes,\s*Confirm/i }).first();
+  // Prefer the known modal primary button id (avoids animation/stability flakes).
+  const confirm = page
+    .locator("#modalShellPrimaryButton")
+    .or(page.getByRole("button", { name: /Yes,\s*Confirm/i }))
+    .first();
   await confirm.waitFor({ state: "visible", timeout: 30000 });
-  await confirm.click();
+  await sleep(300);
+  await clickStable(confirm, { forceAfterMs: 1500 });
 
   // Wait for confirm modal / detail to close and list to return.
   await confirm.waitFor({ state: "hidden", timeout: 30000 }).catch(() => {});
@@ -73,6 +76,26 @@ export async function resolveOneFyiNotify(page, selectors = {}) {
 
   // Ensure we're back on a list with cards (or empty).
   await page.getByText(/FYI NOTIFY/i).first().waitFor({ state: "visible", timeout: 30000 }).catch(() => {});
+}
+
+/**
+ * Click with retries; fall back to force click when the button keeps animating
+ * ("element is not stable").
+ */
+async function clickStable(locator, { forceAfterMs = 2500 } = {}) {
+  await locator.scrollIntoViewIfNeeded().catch(() => {});
+  try {
+    await locator.click({ timeout: forceAfterMs });
+    return;
+  } catch (error) {
+    const message = String(error?.message || error);
+    if (!/not stable|Timeout|intercepts pointer/i.test(message)) {
+      throw error;
+    }
+  }
+
+  // Animation / overlay flake — force the click.
+  await locator.click({ force: true, timeout: 10000 });
 }
 
 function sleep(ms) {
