@@ -33,15 +33,19 @@ export function resolveDriverName(rawName, config) {
 }
 
 /**
- * Sold / LD / demo / accident vehicles should always use Driver Unknown
- * (no Webfleet lookup needed).
+ * Sold / LDV / accident vehicles should always use Driver Unknown
+ * (no Webfleet lookup). Demo trucks are looked up normally.
  */
 export function shouldForceDefaultDriver(truckNumber) {
   const value = String(truckNumber || "");
+  // Demo trucks must go through Webfleet like normal vehicles.
+  if (/\bdemo\b/i.test(value)) {
+    return false;
+  }
   return (
-    /\b(sold|accident|demo)\b/i.test(value) ||
+    /\b(sold|accident)\b/i.test(value) ||
     /^ldv/i.test(value.trim()) ||
-    /\bldv?\d+/i.test(value)
+    /\bldv\d+/i.test(value)
   );
 }
 

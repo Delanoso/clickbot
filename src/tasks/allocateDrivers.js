@@ -77,8 +77,8 @@ export async function runAllocateDrivers(config) {
       }
 
       let suffix = "";
-      if (result.reason === "sold_or_ld_vehicle") {
-        suffix = " (Sold/LD/demo → Driver Unknown)";
+      if (result.reason === "sold_ldv_or_accident") {
+        suffix = " (Sold/LDV/accident → Driver Unknown)";
       } else if (result.usedDropdownFallback) {
         suffix = " (fallback: not in Lytx dropdown → Driver Unknown)";
       } else if (result.usedFallback) {
@@ -130,7 +130,8 @@ async function allocateOne(lytx, webfleet, config) {
     throw new Error("Vehicle/truck number was empty on the Lytx Assign Drivers table.");
   }
 
-  // 2) Webfleet lookup — skip for Sold / LD / demo trucks (always Driver Unknown)
+  // 2) Webfleet lookup — skip Sold / LDV / accident (always Driver Unknown).
+  // Demo trucks are looked up in Webfleet like normal vehicles.
   let driverName;
   let usedFallback = false;
   let reason = null;
@@ -138,9 +139,9 @@ async function allocateOne(lytx, webfleet, config) {
   if (shouldForceDefaultDriver(truckNumber)) {
     driverName = config.defaultDriverName || "Driver Unknown";
     usedFallback = true;
-    reason = "sold_or_ld_vehicle";
+    reason = "sold_ldv_or_accident";
     console.log(
-      `Truck ${truckNumber} marked Sold/LD/demo — assigning ${driverName} (skipping Webfleet).`
+      `Truck ${truckNumber} marked Sold/LDV/accident — assigning ${driverName} (skipping Webfleet).`
     );
   } else {
     await webfleet.bringToFront();
