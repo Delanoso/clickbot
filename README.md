@@ -112,16 +112,20 @@ The browser opens both pages. Leave it running; press `Ctrl+C` to stop.
 
 ```
 config/
-  default.json          # shared defaults
+  default.json          # shared defaults (Lytx + Webfleet)
   local.example.json    # template — copy to local.json
-  local.json            # your secrets/selectors (gitignored)
+  local.json            # your overrides (gitignored)
+  demo.json             # local fake apps for npm run demo
 src/
   index.js              # entrypoint / task router
-  browser.js            # open both apps, shared page helpers
+  browser.js            # open both apps + login
+  apps/
+    lytx.js             # Assign Drivers page actions
+    webfleet.js         # map search + driver lookup
   tasks/
     allocateDrivers.js  # task 1 loop
   utils/
-    driverName.js       # name validation + fallback
+    driverName.js       # name cleanup + fallback
 ```
 
 More tasks can be added under `src/tasks/` and wired in `src/index.js`.
