@@ -191,10 +191,15 @@ export async function assignDriverInLytx(
   page,
   selectors,
   driverName,
-  { defaultDriverName = "Driver Unknown", truckNumber = null } = {}
+  {
+    defaultDriverName = "Driver Unknown",
+    truckNumber = null,
+    emptyVehicleOnly = false,
+  } = {}
 ) {
   // Custom Lytx checkboxes are <i id="assignDriverCheckbox"> icons, not inputs.
   // Only select rows for this truck — never other vehicles if the filter is leaky.
+  // When emptyVehicleOnly, select rows whose VEHICLE cell is blank.
   const rows = page.locator(".cdk-row.lytx-table-row");
   const rowCount = await rows.count();
   let selected = 0;
@@ -203,7 +208,9 @@ export async function assignDriverInLytx(
     const vehicleText = normalizeVehicle(
       await row.locator(".cdk-column-Vehicle").innerText().catch(() => "")
     );
-    if (truckNumber && vehicleText !== truckNumber) {
+    if (emptyVehicleOnly) {
+      if (vehicleText) continue;
+    } else if (truckNumber && vehicleText !== truckNumber) {
       continue;
     }
     const box = row.locator("#assignDriverCheckbox, i.checkbox").first();
@@ -217,29 +224,49 @@ export async function assignDriverInLytx(
     }
   }
 
-  if (selected === 0 && selectors.selectAllCheckbox) {
+  if (selected === 0 && selectors.selectAllCheckbox && !emptyVehicleOnly) {
     await clickIfPresentFrom(page, selectors.selectAllCheckbox, { timeout: 5000 });
   }
 
   if (selected === 0) {
-    // Fall back to first row Assign button for this truck only.
-    const rowAssign = truckNumber
-      ? rows
-          .filter({
-            has: page.locator(".cdk-column-Vehicle", {
-              hasText: new RegExp(
-                truckNumber.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-                "i"
-              ),
-            }),
-          })
-          .getByRole("button", { name: "Assign", exact: true })
-          .first()
-      : page.getByRole("button", { name: "Assign", exact: true }).first();
-    if (await rowAssign.isVisible().catch(() => false)) {
+    // Fall back to first matching row Assign button.
+    let rowAssign = null;
+    if (emptyVehicleOnly) {
+      for (let i = 0; i < rowCount; i += 1) {
+        const row = rows.nth(i);
+        const vehicleText = normalizeVehicle(
+          await row.locator(".cdk-column-Vehicle").innerText().catch(() => "")
+        );
+        if (vehicleText) continue;
+        const btn = row.getByRole("button", { name: "Assign", exact: true }).first();
+        if (await btn.isVisible().catch(() => false)) {
+          rowAssign = btn;
+          break;
+        }
+      }
+    } else if (truckNumber) {
+      rowAssign = rows
+        .filter({
+          has: page.locator(".cdk-column-Vehicle", {
+            hasText: new RegExp(
+              truckNumber.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+              "i"
+            ),
+          }),
+        })
+        .getByRole("button", { name: "Assign", exact: true })
+        .first();
+    } else {
+      rowAssign = page.getByRole("button", { name: "Assign", exact: true }).first();
+    }
+    if (rowAssign && (await rowAssign.isVisible().catch(() => false))) {
       await rowAssign.click();
     } else {
-      throw new Error(`No selectable rows found for truck ${truckNumber || "(unknown)"}.`);
+      throw new Error(
+        emptyVehicleOnly
+          ? "No selectable rows found for empty vehicle number."
+          : `No selectable rows found for truck ${truckNumber || "(unknown)"}.`
+      );
     }
   } else {
     const batch = page.locator("#batchAssignButton");
@@ -250,7 +277,9 @@ export async function assignDriverInLytx(
       await batch.click();
     } else {
       throw new Error(
-        `Selected ${selected} row(s) for ${truckNumber}, but Assign Selected stayed disabled.`
+        `Selected ${selected} row(s) for ${
+          emptyVehicleOnly ? "(empty vehicle)" : truckNumber
+        }, but Assign Selected stayed disabled.`
       );
     }
   }

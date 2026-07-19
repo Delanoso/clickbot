@@ -17,6 +17,7 @@ import { resolveDriverName, shouldForceDefaultDriver } from "../utils/driverName
  *
  * Flow (one iteration):
  * 1. Lytx Assign Drivers — read first VEHICLE id
+ *    - If blank → assign Driver Unknown (no Webfleet)
  * 2. Webfleet — search vehicle, copy DRIVER name (or "Driver Unknown")
  * 3. Lytx — filter that vehicle, open Assign modal, paste name, confirm
  */
@@ -31,6 +32,7 @@ export async function runAllocateDrivers(config) {
   let run = 0;
   let lastTruck = null;
   let sameTruckStreak = 0;
+  let emptyStreak = 0;
 
   console.log("Lytx + Webfleet open. Starting full driver allocation loop.");
   console.log(maxRuns > 0 ? `maxRuns=${maxRuns}` : "Running until the Assign Drivers queue is empty.");
@@ -54,68 +56,78 @@ export async function runAllocateDrivers(config) {
       try {
         result = await allocateOne(lytx, webfleet, config);
       } catch (error) {
-        if (/empty/i.test(error.message || "")) {
-          console.log("Hit an empty vehicle row; checking whether the queue is done...");
-          await clearLytxVehicleFilter(lytx, config.apps.dispatch.selectors).catch(() => {});
-          if (!(await hasAssignableRows(lytx, config.apps.dispatch.selectors))) {
-            console.log("No more vehicles left in Assign Drivers. Done.");
+        if (/empty vehicle/i.test(error.message || "")) {
+          emptyStreak += 1;
+          console.log(`Could not assign empty vehicle row: ${error.message}`);
+          if (emptyStreak >= 5 || !(await hasAssignableRows(lytx, config.apps.dispatch.selectors))) {
+            console.log("No more assignable empty/vehicle rows. Done.");
             break;
           }
-          console.log(`Skipping empty row and continuing. (${error.message})`);
           continue;
         }
         throw error;
       }
 
-      if (!result.truckNumber) {
-        console.log("Empty truck number returned; stopping if queue is clear.");
-        if (!(await hasAssignableRows(lytx, config.apps.dispatch.selectors))) {
-          console.log("No more vehicles left in Assign Drivers. Done.");
+      if (result.reason === "empty_truck_number") {
+        emptyStreak += 1;
+        console.log(
+          `(no truck number) -> ${result.driverName} (empty vehicle → Driver Unknown)`
+        );
+        if (emptyStreak >= 5) {
+          console.log(
+            "Empty vehicle rows still present after 5 Driver Unknown assigns — treating queue as finished."
+          );
           break;
         }
-        continue;
-      }
-
-      let suffix = "";
-      if (result.reason === "sold_ldv_or_accident") {
-        suffix = " (Sold/LDV/accident → Driver Unknown)";
-      } else if (result.usedDropdownFallback) {
-        suffix = " (fallback: not in Lytx dropdown → Driver Unknown)";
-      } else if (result.usedFallback) {
-        suffix = ` (fallback: ${result.reason})`;
-      }
-      console.log(`Truck ${result.truckNumber} -> ${result.driverName}${suffix}`);
-
-      if (result.truckNumber === lastTruck) {
-        sameTruckStreak += 1;
       } else {
-        sameTruckStreak = 1;
-        lastTruck = result.truckNumber;
-      }
-      if (sameTruckStreak >= 3) {
-        console.log(
-          `Truck ${result.truckNumber} still at top after ${sameTruckStreak} assigns — forcing Driver Unknown once, then continuing.`
-        );
-        try {
-          await clearLytxVehicleFilter(lytx, config.apps.dispatch.selectors);
-          await filterLytxByVehicle(lytx, config.apps.dispatch.selectors, result.truckNumber);
-          await assignDriverInLytx(
-            lytx,
-            config.apps.dispatch.selectors,
-            config.defaultDriverName || "Driver Unknown",
-            {
-              defaultDriverName: config.defaultDriverName || "Driver Unknown",
-              truckNumber: result.truckNumber,
-            }
-          );
-          await clearLytxVehicleFilter(lytx, config.apps.dispatch.selectors);
-        } catch (error) {
-          console.log(`Forced Driver Unknown failed for ${result.truckNumber}: ${error.message}`);
-          await lytx.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
-          await ensureLytxAssignPage(lytx, config.apps.dispatch);
+        emptyStreak = 0;
+        let suffix = "";
+        if (result.reason === "sold_ldv_or_accident") {
+          suffix = " (Sold/LDV/accident → Driver Unknown)";
+        } else if (result.usedDropdownFallback) {
+          suffix = " (fallback: not in Lytx dropdown → Driver Unknown)";
+        } else if (result.usedFallback) {
+          suffix = ` (fallback: ${result.reason})`;
         }
-        sameTruckStreak = 0;
-        lastTruck = null;
+        console.log(`Truck ${result.truckNumber} -> ${result.driverName}${suffix}`);
+
+        if (result.truckNumber === lastTruck) {
+          sameTruckStreak += 1;
+        } else {
+          sameTruckStreak = 1;
+          lastTruck = result.truckNumber;
+        }
+        if (sameTruckStreak >= 3) {
+          console.log(
+            `Truck ${result.truckNumber} still at top after ${sameTruckStreak} assigns — forcing Driver Unknown once, then continuing.`
+          );
+          try {
+            await clearLytxVehicleFilter(lytx, config.apps.dispatch.selectors);
+            await filterLytxByVehicle(
+              lytx,
+              config.apps.dispatch.selectors,
+              result.truckNumber
+            );
+            await assignDriverInLytx(
+              lytx,
+              config.apps.dispatch.selectors,
+              config.defaultDriverName || "Driver Unknown",
+              {
+                defaultDriverName: config.defaultDriverName || "Driver Unknown",
+                truckNumber: result.truckNumber,
+              }
+            );
+            await clearLytxVehicleFilter(lytx, config.apps.dispatch.selectors);
+          } catch (error) {
+            console.log(
+              `Forced Driver Unknown failed for ${result.truckNumber}: ${error.message}`
+            );
+            await lytx.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
+            await ensureLytxAssignPage(lytx, config.apps.dispatch);
+          }
+          sameTruckStreak = 0;
+          lastTruck = null;
+        }
       }
 
       const delay = config.loop?.delayBetweenRunsMs ?? 2000;
@@ -138,13 +150,29 @@ async function hasAssignableRows(page, selectors) {
 async function allocateOne(lytx, webfleet, config) {
   const lytxSel = config.apps.dispatch.selectors;
   const fleetSel = config.apps.fleet.selectors;
+  const defaultDriverName = config.defaultDriverName || "Driver Unknown";
 
   // 1) Lytx: read truck/vehicle number from the table
   await lytx.bringToFront();
   await ensureLytxAssignPage(lytx, config.apps.dispatch);
   const truckNumber = await readFirstVehicle(lytx, lytxSel);
+
+  // No truck number → skip Webfleet and assign Driver Unknown to blank vehicle rows.
   if (!truckNumber) {
-    throw new Error("Vehicle/truck number was empty on the Lytx Assign Drivers table.");
+    console.log(
+      "No truck number on Lytx row — assigning Driver Unknown (skipping Webfleet)."
+    );
+    const assignResult = await assignDriverInLytx(lytx, lytxSel, defaultDriverName, {
+      defaultDriverName,
+      emptyVehicleOnly: true,
+    });
+    return {
+      truckNumber: "",
+      driverName: assignResult.assignedName,
+      usedFallback: true,
+      usedDropdownFallback: assignResult.usedDropdownFallback,
+      reason: "empty_truck_number",
+    };
   }
 
   // 2) Webfleet lookup — skip Sold / LDV / accident (always Driver Unknown).
@@ -154,7 +182,7 @@ async function allocateOne(lytx, webfleet, config) {
   let reason = null;
 
   if (shouldForceDefaultDriver(truckNumber)) {
-    driverName = config.defaultDriverName || "Driver Unknown";
+    driverName = defaultDriverName;
     usedFallback = true;
     reason = "sold_ldv_or_accident";
     console.log(
@@ -178,7 +206,7 @@ async function allocateOne(lytx, webfleet, config) {
   await lytx.bringToFront();
   await filterLytxByVehicle(lytx, lytxSel, truckNumber);
   const assignResult = await assignDriverInLytx(lytx, lytxSel, driverName, {
-    defaultDriverName: config.defaultDriverName || "Driver Unknown",
+    defaultDriverName,
     truckNumber,
   });
   await clearLytxVehicleFilter(lytx, lytxSel);

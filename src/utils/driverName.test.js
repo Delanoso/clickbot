@@ -38,6 +38,25 @@ assert(fromList === "Phillip Mofokeng", "should strip vehicle id prefix");
 const withPhones = cleanDriverName("Sipha Khanyi 083 879 3215 / 063 735 0503");
 assert(withPhones === "Sipha Khanyi", `should strip phones, got: ${withPhones}`);
 
+const withIntl = cleanDriverName("Sipha Khanyi +27 83 879 3215");
+assert(withIntl === "Sipha Khanyi", `should strip +27 phone, got: ${withIntl}`);
+
+const withDashPhone = cleanDriverName("Jane Doe 083-879-3215");
+assert(withDashPhone === "Jane Doe", `should strip dashed phone, got: ${withDashPhone}`);
+
+const nameOnly = cleanDriverName("Obvios Mukarati");
+assert(nameOnly === "Obvios Mukarati", "name without phone stays unchanged");
+
+const resolvedPhones = resolveDriverName(
+  "Sipha Khanyi 083 879 3215 / 063 735 0503",
+  config
+);
+assert(
+  resolvedPhones.name === "Sipha Khanyi",
+  `resolve must return name only, got: ${resolvedPhones.name}`
+);
+assert(!/\d/.test(resolvedPhones.name), "resolved name must not contain digits from phones");
+
 assert(shouldForceDefaultDriver("H2161 - Sold") === true, "sold should force default");
 assert(shouldForceDefaultDriver("LDV1801") === true, "LDV should be skipped");
 assert(shouldForceDefaultDriver("Demo 95") === false, "demo must NOT be skipped");
