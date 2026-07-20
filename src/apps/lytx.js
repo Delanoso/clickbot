@@ -185,7 +185,8 @@ export async function filterLytxByVehicle(page, selectors, truckNumber) {
 
 /**
  * Select visible rows for a specific truck and open the Assign Driver modal.
- * If the looked-up name is not in the Lytx dropdown, assign "Driver Unknown" instead.
+ * Type the Webfleet No. into Search Name or ID, click the first dropdown suggestion.
+ * If there is no suggestion, type "Driver Unknown" and click its first suggestion.
  */
 export async function assignDriverInLytx(
   page,
@@ -290,12 +291,12 @@ export async function assignDriverInLytx(
   let assignedName = driverName;
   let usedDropdownFallback = false;
 
-  const picked = await pickDriverFromDropdown(page, inputSel, driverName);
+  const picked = await pickFirstDropdownOption(page, inputSel, driverName);
   if (!picked) {
     assignedName = defaultDriverName;
     usedDropdownFallback =
       driverName.toLowerCase() !== defaultDriverName.toLowerCase();
-    const fallbackPicked = await pickDriverFromDropdown(
+    const fallbackPicked = await pickFirstDropdownOption(
       page,
       inputSel,
       defaultDriverName
@@ -341,24 +342,48 @@ export async function assignDriverInLytx(
   return { assignedName, usedDropdownFallback };
 }
 
-async function pickDriverFromDropdown(page, inputSel, driverName) {
-  await fillFrom(page, inputSel, driverName);
+/**
+ * Type into Search Name or ID and click the first dropdown suggestion.
+ * Lytx often shows the driver name (e.g. GREGORY JOUBERT) when you typed a No. (D3854).
+ */
+async function pickFirstDropdownOption(page, inputSel, textToType) {
+  await fillFrom(page, inputSel, textToType);
+  await sleep(400);
 
-  const escaped = driverName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const suggestion = page
-    .locator(
-      '[role="option"], [role="listbox"] *, mat-option, .mat-mdc-option, .cdk-overlay-pane *'
-    )
-    .filter({ hasText: new RegExp(escaped, "i") })
-    .first();
+  const candidates = page.locator(
+    '[role="option"], mat-option, .mat-mdc-option, .mat-option'
+  );
 
-  try {
-    await suggestion.waitFor({ state: "visible", timeout: 4000 });
-    await suggestion.click();
+  const count = await candidates.count();
+  for (let i = 0; i < count; i += 1) {
+    const option = candidates.nth(i);
+    if (!(await option.isVisible().catch(() => false))) continue;
+    const label = ((await option.innerText().catch(() => "")) || "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!label || /^(cancel|assign)$/i.test(label)) continue;
+    await option.click();
     return true;
-  } catch {
-    return false;
   }
+
+  // Fallback: first clickable row in the assign overlay.
+  const overlayOption = page
+    .locator(".cdk-overlay-pane")
+    .locator("mat-option, [role='option'], .dropdown-item, button")
+    .filter({ hasText: /.+/ })
+    .first();
+  try {
+    await overlayOption.waitFor({ state: "visible", timeout: 3000 });
+    const label = ((await overlayOption.innerText().catch(() => "")) || "").trim();
+    if (label && !/^(cancel|assign)$/i.test(label)) {
+      await overlayOption.click();
+      return true;
+    }
+  } catch {
+    // no suggestion
+  }
+
+  return false;
 }
 
 /**
