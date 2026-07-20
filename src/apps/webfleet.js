@@ -4,9 +4,12 @@ import { locate } from "../locate.js";
  * Webfleet Drivers list helpers.
  * Work URL: https://live-wf.webfleet.com/web/drivers/list
  *
- * Lookup: search by truck **number only** (no H/NH/AH/R prefix) → take the
- * top row's driver "No." (e.g. D3309). Truck numbers are unique, so the first
- * result is the correct vehicle.
+ * Lookup (double search):
+ * 1) Search with the Lytx vehicle id (H2241, NH2404, R2610, …)
+ * 2) If no hit, search with digits only (2241) and match the Vehicle column
+ *    so phone-number hits in Name are ignored.
+ *
+ * Returns the driver "No." (e.g. D3309), not the Name.
  */
 export async function ensureWebfleetMap(page, appConfig) {
   return ensureWebfleetDrivers(page, appConfig);
@@ -23,11 +26,9 @@ export async function ensureWebfleetDrivers(page, appConfig) {
 }
 
 /**
- * Search the Drivers list by truck number digits and return the top row's
- * driver "No." (e.g. D3309).
+ * Search the Drivers list and return the driver "No." (e.g. D3309).
  */
 export async function lookupDriverInWebfleet(page, selectors, truckNumber) {
-  // Ensure we are on Drivers (sidebar link) if still on map/login landing.
   if (!/\/drivers/i.test(page.url())) {
     const driversLink = page.locator('a[href*="/web/drivers"]').first();
     if (await driversLink.count()) {
@@ -42,14 +43,34 @@ export async function lookupDriverInWebfleet(page, selectors, truckNumber) {
     await sleep(800);
   }
 
-  const digits = vehicleDigits(truckNumber);
-  if (!digits) {
-    return "";
+  const search = await resolveDriversSearchInput(page, selectors);
+  const { leading, digits } = vehicleSearchTokens(truckNumber);
+  if (!leading && !digits) return "";
+
+  // 1) Search with full Lytx id (includes prefix).
+  let raw = await searchAndReadDriverNo(page, search, selectors, leading, {
+    leading,
+    digits,
+  });
+  if (raw) return raw;
+
+  // 2) Retry with digits only (handles AH2241 / SH2241 when Lytx has H2241).
+  //    Matching still requires the Vehicle column number — not Name/phone hits.
+  if (digits && digits !== leading && digits.length >= 3) {
+    raw = await searchAndReadDriverNo(page, search, selectors, digits, {
+      leading,
+      digits,
+    });
+    if (raw) return raw;
   }
 
-  const search = await resolveDriversSearchInput(page, selectors);
+  return "";
+}
+
+async function searchAndReadDriverNo(page, search, selectors, query, tokens) {
+  if (!query) return "";
   await search.fill("", { force: true });
-  await search.fill(digits, { force: true });
+  await search.fill(query, { force: true });
   await search.press("Enter");
   await sleep(1000);
 
@@ -65,17 +86,18 @@ export async function lookupDriverInWebfleet(page, selectors, truckNumber) {
     }
   }
 
-  return readTopDriverNoForDigits(page, digits);
+  return readDriverNoFromTable(page, tokens);
 }
 
 /**
- * Extract the numeric part of a Lytx vehicle label.
- * "NH2404" → "2404", "H2110 - Sold" → "2110", "Demo 95" → "95"
+ * "H2110 - Sold" → leading H2110, digits 2110
+ * "Demo 95" → leading Demo, digits 95
+ * "NH2404" → leading NH2404, digits 2404
  */
 export function vehicleSearchTokens(truckNumber) {
-  const digits = vehicleDigits(truckNumber);
   const full = String(truckNumber || "").trim();
   const leading = full.split(/\s+[–—-]\s+|\s+/)[0] || full;
+  const digits = vehicleDigits(truckNumber);
   return { leading, digits };
 }
 
@@ -91,51 +113,87 @@ export function vehicleDigits(truckNumber) {
 }
 
 /**
- * After a digits-only search, take the first row whose Vehicle id contains
- * that number. (Webfleet also matches phone digits, so we cannot blindly
- * use table row 1 — but truck numbers are unique, so the first vehicle hit
- * is correct.)
+ * Pick driver No. from the Drivers table using Vehicle-column matching only
+ * (never Name/phone). Prefers exact / prefix variants, then unique digit match.
  */
-async function readTopDriverNoForDigits(page, digits) {
+async function readDriverNoFromTable(page, { leading, digits }) {
   try {
-    const raw = await page.evaluate((digits) => {
-      const normalize = (s) => String(s || "").replace(/\s+/g, " ").trim();
-      const esc = digits.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      // Vehicle id must contain this number as its numeric core
-      // e.g. 2404 matches NH2404 / AH2404, not R2294.
-      const vehicleHasNumber = (vehicleId) => {
-        const id = vehicleId.split(/[–—-]/)[0].trim();
-        const idDigits = (id.match(/(\d+)/) || [])[1] || "";
-        return idDigits === digits;
-      };
+    const raw = await page.evaluate(
+      ({ leading, digits }) => {
+        const normalize = (s) => String(s || "").replace(/\s+/g, " ").trim();
+        const esc = (s) => String(s || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const leadingEsc = esc(leading);
 
-      const table = document.querySelector("table");
-      const headers = table
-        ? [...table.querySelectorAll("thead th")].map((h) => normalize(h.innerText))
-        : [...document.querySelectorAll('[role="columnheader"]')].map((h) =>
-            normalize(h.innerText)
-          );
+        const table = document.querySelector("table");
+        const headers = table
+          ? [...table.querySelectorAll("thead th")].map((h) => normalize(h.innerText))
+          : [...document.querySelectorAll('[role="columnheader"]')].map((h) =>
+              normalize(h.innerText)
+            );
 
-      let noIdx = headers.findIndex((h) => /^No\.?$/i.test(h));
-      let vehicleIdx = headers.findIndex((h) => /^Vehicle$/i.test(h));
-      if (noIdx < 0) noIdx = 2;
-      if (vehicleIdx < 0) vehicleIdx = 3;
+        let noIdx = headers.findIndex((h) => /^No\.?$/i.test(h));
+        let vehicleIdx = headers.findIndex((h) => /^Vehicle$/i.test(h));
+        if (noIdx < 0) noIdx = 2;
+        if (vehicleIdx < 0) vehicleIdx = 3;
 
-      const rowEls = table
-        ? [...table.querySelectorAll("tbody tr")]
-        : [...document.querySelectorAll('[role="row"]')].filter(
-            (r) => r.querySelectorAll('[role="cell"]').length > 2
-          );
+        const rowEls = table
+          ? [...table.querySelectorAll("tbody tr")]
+          : [...document.querySelectorAll('[role="row"]')].filter(
+              (r) => r.querySelectorAll('[role="cell"]').length > 2
+            );
 
-      for (const tr of rowEls) {
-        const cells = [
-          ...tr.querySelectorAll(table ? "td" : '[role="cell"]'),
-        ].map((c) => normalize(c.innerText));
-        if (!cells.some(Boolean)) continue;
-        const vehicle = cells[vehicleIdx] || "";
-        if (!vehicleHasNumber(vehicle)) continue;
+        const rows = rowEls.map((tr) => {
+          const cells = [
+            ...tr.querySelectorAll(table ? "td" : '[role="cell"]'),
+          ].map((c) => normalize(c.innerText));
+          return {
+            no: cells[noIdx] || "",
+            vehicle: cells[vehicleIdx] || "",
+            cells,
+          };
+        });
 
-        const no = cells[noIdx] || "";
+        const scored = rows
+          .map((row) => {
+            const vehicleId = row.vehicle.split(/[–—-]/)[0].trim();
+            const vehicleDigits = (vehicleId.match(/(\d+)/) || [])[1] || "";
+            let score = 0;
+
+            if (leading && new RegExp(`^${leadingEsc}$`, "i").test(vehicleId)) {
+              score = 100; // exact H2021
+            } else if (
+              leading &&
+              new RegExp(`^${leadingEsc}[A-Za-z0-9]+$`, "i").test(vehicleId)
+            ) {
+              score = 90; // R2610 → R2610MH
+            } else if (
+              leading &&
+              new RegExp(`^[A-Za-z]*${leadingEsc}$`, "i").test(vehicleId)
+            ) {
+              score = 85; // H2241 → AH2241 / SH2241
+            } else if (digits && digits.length >= 3 && vehicleDigits === digits) {
+              score = 70; // same number core only
+            }
+
+            return { ...row, vehicleId, score };
+          })
+          .filter((r) => r.score > 0)
+          .sort((a, b) => b.score - a.score);
+
+        if (!scored.length) return "";
+
+        const top = scored[0].score;
+        const tied = scored.filter((r) => r.score === top);
+
+        // Ambiguous digit-only hits → do not guess (phone search noise / collisions).
+        if (top <= 70 && tied.length > 1) {
+          return "";
+        }
+
+        tied.sort((a, b) => a.vehicleId.length - b.vehicleId.length);
+        const best = tied[0];
+        const no = normalize(best.no);
+
         if (
           !no ||
           /^—+$/.test(no) ||
@@ -144,9 +202,9 @@ async function readTopDriverNoForDigits(page, digits) {
           return "";
         }
         return no;
-      }
-      return "";
-    }, digits);
+      },
+      { leading, digits }
+    );
 
     return normalizeDriverNo(raw);
   } catch {
