@@ -180,10 +180,16 @@ async function readDriverNoFromTable(page, { leading, digits }) {
 
         if (!scored.length) return "";
 
-        // If several digit-only matches, prefer the shortest vehicle id
-        // (H2241 over something like XXH2241EXTRA) among top score.
         const top = scored[0].score;
         const tied = scored.filter((r) => r.score === top);
+
+        // Digit-only matches (score 70): if more than one vehicle shares the
+        // same number, do not guess — caller maps empty → Driver Unknown.
+        if (top <= 70 && tied.length > 1) {
+          return "";
+        }
+
+        // Among equal stronger matches, prefer the shortest vehicle id.
         tied.sort((a, b) => a.vehicleId.length - b.vehicleId.length);
         const best = tied[0];
         const no = normalize(best.no);
