@@ -1,10 +1,13 @@
-import { clickIfPresentFrom, locate } from "../locate.js";
+import { locate } from "../locate.js";
 
 /**
  * Webfleet Drivers list helpers.
  * Work URL: https://live-wf.webfleet.com/web/drivers/list
  *
  * Lookup: search by truck/vehicle id → read the matching row's "No." (driver id).
+ *
+ * Lytx often uses H/R/NH… while Webfleet may use AH/SH/NH… for the same number.
+ * Matching prefers exact id, then suffix/prefix variants, then shared digits.
  */
 export async function ensureWebfleetMap(page, appConfig) {
   return ensureWebfleetDrivers(page, appConfig);
@@ -41,9 +44,30 @@ export async function lookupDriverInWebfleet(page, selectors, truckNumber) {
   }
 
   const search = await resolveDriversSearchInput(page, selectors);
-  const searchTerm = String(truckNumber).split(/\s+[–—-]\s+|\s+/)[0];
+  const { leading, digits } = vehicleSearchTokens(truckNumber);
+
+  // 1) Search with the Lytx id (H2241, NH2008, R2610, …).
+  let raw = await searchAndReadDriverNo(page, search, selectors, leading, {
+    leading,
+    digits,
+  });
+  if (raw) return raw;
+
+  // 2) Retry with digits only so Webfleet can surface AH2241 / SH2241 / etc.
+  if (digits && digits !== leading && digits.length >= 3) {
+    raw = await searchAndReadDriverNo(page, search, selectors, digits, {
+      leading,
+      digits,
+    });
+    if (raw) return raw;
+  }
+
+  return "";
+}
+
+async function searchAndReadDriverNo(page, search, selectors, query, tokens) {
   await search.fill("", { force: true });
-  await search.fill(searchTerm, { force: true });
+  await search.fill(query, { force: true });
   await search.press("Enter");
   await sleep(1000);
 
@@ -52,79 +76,129 @@ export async function lookupDriverInWebfleet(page, selectors, truckNumber) {
       const raw = await locate(page, selectors.driverNumberResult).innerText({
         timeout: 8000,
       });
-      return normalizeDriverNo(raw);
+      const normalized = normalizeDriverNo(raw);
+      if (normalized) return normalized;
     } catch {
       // fall through
     }
   }
 
-  return readDriverNoFromTable(page, searchTerm);
+  return readDriverNoFromTable(page, tokens);
 }
 
 /**
- * Read "No." from the Drivers table row whose Vehicle matches the truck id.
+ * Build search tokens from a Lytx vehicle label.
+ * "H2110 - Sold" → leading H2110, digits 2110
+ * "Demo 95" → leading Demo, digits 95
  */
-async function readDriverNoFromTable(page, searchTerm) {
+export function vehicleSearchTokens(truckNumber) {
+  const full = String(truckNumber || "").trim();
+  const leading = full.split(/\s+[–—-]\s+|\s+/)[0] || full;
+  const digits =
+    (leading.match(/(\d{3,})/) ||
+      full.match(/(\d{3,})/) ||
+      full.match(/(\d+)/) ||
+      leading.match(/(\d+)/) || [null, ""])[1] || "";
+  return { leading, digits };
+}
+
+/**
+ * Read "No." from the Drivers table row whose Vehicle best matches the Lytx id.
+ * Handles Webfleet prefixes: H2241 ↔ AH2241 / SH2241, R2610 ↔ R2610MH.
+ */
+async function readDriverNoFromTable(page, { leading, digits }) {
   try {
-    const raw = await page.evaluate((term) => {
-      const normalize = (s) => String(s || "").replace(/\s+/g, " ").trim();
-      const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const idRe = new RegExp(`(?:^|[^A-Za-z0-9])${escaped}(?![A-Za-z0-9])`, "i");
-      const prefixRe = new RegExp(`^\\s*${escaped}[A-Za-z0-9]*\\b`, "i");
+    const raw = await page.evaluate(
+      ({ leading, digits }) => {
+        const normalize = (s) => String(s || "").replace(/\s+/g, " ").trim();
+        const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const leadingEsc = esc(leading);
+        const digitsEsc = digits ? esc(digits) : "";
 
-      const table = document.querySelector("table");
-      const headers = table
-        ? [...table.querySelectorAll("thead th")].map((h) => normalize(h.innerText))
-        : [...document.querySelectorAll('[role="columnheader"]')].map((h) =>
-            normalize(h.innerText)
-          );
+        const table = document.querySelector("table");
+        const headers = table
+          ? [...table.querySelectorAll("thead th")].map((h) => normalize(h.innerText))
+          : [...document.querySelectorAll('[role="columnheader"]')].map((h) =>
+              normalize(h.innerText)
+            );
 
-      let noIdx = headers.findIndex((h) => /^No\.?$/i.test(h));
-      let vehicleIdx = headers.findIndex((h) => /^Vehicle$/i.test(h));
-      // Headers often start with an empty avatar column.
-      if (noIdx < 0) noIdx = 2;
-      if (vehicleIdx < 0) vehicleIdx = 3;
+        let noIdx = headers.findIndex((h) => /^No\.?$/i.test(h));
+        let vehicleIdx = headers.findIndex((h) => /^Vehicle$/i.test(h));
+        if (noIdx < 0) noIdx = 2;
+        if (vehicleIdx < 0) vehicleIdx = 3;
 
-      const rowEls = table
-        ? [...table.querySelectorAll("tbody tr")]
-        : [...document.querySelectorAll('[role="row"]')].filter(
-            (r) => r.querySelectorAll('[role="cell"]').length > 2
-          );
+        const rowEls = table
+          ? [...table.querySelectorAll("tbody tr")]
+          : [...document.querySelectorAll('[role="row"]')].filter(
+              (r) => r.querySelectorAll('[role="cell"]').length > 2
+            );
 
-      const rows = rowEls.map((tr) => {
-        const cells = [
-          ...tr.querySelectorAll(table ? "td" : '[role="cell"]'),
-        ].map((c) => normalize(c.innerText));
-        return {
-          no: cells[noIdx] || "",
-          vehicle: cells[vehicleIdx] || "",
-          cells,
-        };
-      });
+        const rows = rowEls.map((tr) => {
+          const cells = [
+            ...tr.querySelectorAll(table ? "td" : '[role="cell"]'),
+          ].map((c) => normalize(c.innerText));
+          return {
+            no: cells[noIdx] || "",
+            vehicle: cells[vehicleIdx] || "",
+            cells,
+          };
+        });
 
-      const scored = rows
-        .map((row) => {
-          const vehicleId = row.vehicle.split(/[–—-]/)[0].trim();
-          let score = 0;
-          if (new RegExp(`^${escaped}$`, "i").test(vehicleId)) score = 100;
-          else if (prefixRe.test(vehicleId)) score = 80;
-          else if (idRe.test(row.vehicle)) score = 60;
-          else if (row.cells.some((c) => idRe.test(c))) score = 20;
-          return { ...row, vehicleId, score };
-        })
-        .filter((r) => r.score > 0)
-        .sort((a, b) => b.score - a.score);
+        const scored = rows
+          .map((row) => {
+            const vehicleId = row.vehicle.split(/[–—-]/)[0].trim();
+            const vehicleDigits = (vehicleId.match(/(\d+)/) || [])[1] || "";
+            let score = 0;
 
-      if (!scored.length) return "";
-      const best = scored[0];
-      const no = normalize(best.no);
+            // Exact: H2021 === H2021
+            if (new RegExp(`^${leadingEsc}$`, "i").test(vehicleId)) score = 100;
+            // Lytx id is a prefix of Webfleet id: R2610 → R2610MH
+            else if (new RegExp(`^${leadingEsc}[A-Za-z0-9]+$`, "i").test(vehicleId))
+              score = 90;
+            // Webfleet adds a letter prefix: H2241 → AH2241 / SH2241
+            else if (new RegExp(`^[A-Za-z]*${leadingEsc}$`, "i").test(vehicleId))
+              score = 85;
+            // Same number core (prefer longer digit runs): 2241
+            else if (
+              digitsEsc &&
+              digits.length >= 3 &&
+              vehicleDigits === digits
+            )
+              score = 70;
+            // Contains Lytx id as a token somewhere in the vehicle cell
+            else if (
+              new RegExp(`(?:^|[^A-Za-z0-9])${leadingEsc}(?![A-Za-z0-9])`, "i").test(
+                row.vehicle
+              )
+            )
+              score = 50;
 
-      // No driver allocated / blank No. → empty (caller maps to Driver Unknown).
-      if (!no || /^—+$/.test(no) || /^(no driver|n\/a|na|none|unknown|-|--)$/i.test(no)) {
-        return "";
-      }
-      return no;
-    }, searchTerm);
+            return { ...row, vehicleId, score };
+          })
+          .filter((r) => r.score > 0)
+          .sort((a, b) => b.score - a.score);
+
+        if (!scored.length) return "";
+
+        // If several digit-only matches, prefer the shortest vehicle id
+        // (H2241 over something like XXH2241EXTRA) among top score.
+        const top = scored[0].score;
+        const tied = scored.filter((r) => r.score === top);
+        tied.sort((a, b) => a.vehicleId.length - b.vehicleId.length);
+        const best = tied[0];
+        const no = normalize(best.no);
+
+        if (
+          !no ||
+          /^—+$/.test(no) ||
+          /^(no driver|n\/a|na|none|unknown|-|--)$/i.test(no)
+        ) {
+          return "";
+        }
+        return no;
+      },
+      { leading, digits }
+    );
 
     return normalizeDriverNo(raw);
   } catch {
@@ -138,11 +212,9 @@ function normalizeDriverNo(raw) {
     .trim();
   if (!value || /^—+$/.test(value)) return "";
   if (/^(no driver|n\/a|na|none|unknown|-|--)$/i.test(value)) return "";
-  // Keep the id token only (first word), e.g. "D3309"
   const token = value.split(/\s+/)[0];
   if (/^(no|n\/a|na|none|unknown)$/i.test(token)) return "";
   if (!/^[A-Za-z]{0,4}\d{2,}$/i.test(token) && !/^[A-Za-z]+\d+/i.test(token)) {
-    // Still allow unusual ids; just reject obvious names-with-phones.
     if (/\d{6,}/.test(value.replace(/\s/g, ""))) return "";
   }
   return token;
@@ -155,7 +227,7 @@ async function resolveDriversSearchInput(page, selectors) {
       await locator.waitFor({ state: "visible", timeout: 5000 });
       return locator;
     } catch {
-      // continue — pick a visible search field
+      // continue
     }
   }
 
@@ -170,7 +242,6 @@ async function resolveDriversSearchInput(page, selectors) {
     }
   }
 
-  // Hidden duplicate search fields exist on this page — force the last one.
   const forced = candidates.last();
   await forced.waitFor({ state: "attached", timeout: 10000 });
   return forced;
