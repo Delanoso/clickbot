@@ -10,13 +10,14 @@
   "depotMonitor": {
     "pollIntervalMs": 60000,
     "alertOnInitialMatch": true,
-    "targetArea": "HFR - Boksburg Depot",
+    "targetArea": "N Boundary Road, Boksburg 1459, ZA",
     "targetAreas": [
+      "N Boundary Road, Boksburg 1459, ZA",
+      "N Boundary Road, Boksburg",
       "HFR - Boksburg Depot",
       "HFR - BOKSBURG DEPOT",
       "Boksburg Depot",
-      "North Boundary Road, Salfin, Boksburg",
-      "N Boundary Road, Boksburg"
+      "North Boundary Road, Salfin, Boksburg"
     ],
     "trucks": [],
     "workUrl": "https://live-wf.webfleet.com/web/map",
