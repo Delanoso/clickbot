@@ -35,8 +35,15 @@ addTruckForm.addEventListener("submit", async (event) => {
     if (!res.ok) throw new Error(data.error || "Could not add truck");
     truckInput.value = "";
     truckFormNote.textContent = data.added
-      ? `Added ${data.truck}${data.restarted ? " · monitor restarting" : ""}`
-      : `${data.truck} is already on the list`;
+      ? `Added ${data.truck}${data.driver ? ` · ${data.driver}` : " · no driver found"}${
+          data.restarted ? " · monitor restarting" : ""
+        }`
+      : data.updated
+        ? `Updated ${data.truck}${data.driver ? ` · ${data.driver}` : ""}`
+        : `${data.truck} is already on the list`;
+    if (data.lookupError) {
+      truckFormNote.textContent += ` (lookup warning: ${data.lookupError})`;
+    }
     await refresh();
   } catch (error) {
     truckFormNote.textContent = error.message;
@@ -88,6 +95,13 @@ function renderTask(task) {
 }
 
 function renderLive(depot, configuredTrucks) {
+  const driverMap = new Map(
+    (configuredTrucks || []).map((entry) => [
+      String(typeof entry === "string" ? entry : entry.id).toUpperCase(),
+      typeof entry === "string" ? "" : entry.driver || "",
+    ])
+  );
+
   if (!depot) {
     depotSummary.textContent = "Start the monitor to populate live locations.";
     inDepotCount.textContent = "0";
@@ -108,24 +122,29 @@ function renderLive(depot, configuredTrucks) {
     inDepotList.innerHTML = `<p class="empty-note">No watched trucks currently match the depot.</p>`;
   } else {
     inDepotList.innerHTML = inDepot
-      .map(
-        (row) => `
+      .map((row) => {
+        const driver = driverMap.get(String(row.truckNumber).toUpperCase()) || "";
+        const location = row.locationText || "In area";
+        return `
       <div class="truck-row">
         <strong>${escapeHtml(row.truckNumber)}</strong>
-        <span>${escapeHtml(row.locationText || "In area")}</span>
-      </div>`
-      )
+        <span>${escapeHtml(driver ? `${driver} · ${location}` : location)}</span>
+      </div>`;
+      })
       .join("");
   }
 
   allTruckList.innerHTML = trucks
-    .map(
-      (row) => `
+    .map((row) => {
+      const driver = driverMap.get(String(row.truckNumber).toUpperCase()) || "";
+      const location = row.locationText || "Waiting for location…";
+      const line = driver ? `${driver} · ${location}` : location;
+      return `
     <div class="truck-chip ${row.inTargetArea ? "in" : ""}">
       <strong>${escapeHtml(row.truckNumber)}</strong>
-      <span>${escapeHtml(row.locationText || "Waiting for location…")}</span>
-    </div>`
-    )
+      <span>${escapeHtml(line)}</span>
+    </div>`;
+    })
     .join("");
 }
 
@@ -141,18 +160,22 @@ function renderWatchList(trucks, liveRows = []) {
   }
 
   watchList.innerHTML = trucks
-    .map((truck) => {
-      const live = liveMap.get(truck);
-      const meta = live?.locationText
-        ? live.inTargetArea
-          ? `In depot · ${live.locationText}`
-          : live.locationText
-        : "Configured";
+    .map((entry) => {
+      const truck = typeof entry === "string" ? entry : entry.id;
+      const driver = typeof entry === "string" ? "" : entry.driver || "";
+      const live = liveMap.get(String(truck).toUpperCase());
+      const metaParts = [];
+      if (driver) metaParts.push(driver);
+      if (live?.locationText) {
+        metaParts.push(live.inTargetArea ? `In depot · ${live.locationText}` : live.locationText);
+      } else if (!driver) {
+        metaParts.push("Configured");
+      }
       return `
       <div class="watch-row ${live?.inTargetArea ? "in" : ""}">
         <div>
           <strong>${escapeHtml(truck)}</strong>
-          <span>${escapeHtml(meta)}</span>
+          <span>${escapeHtml(metaParts.join(" · "))}</span>
         </div>
         <button type="button" class="btn danger-btn" data-remove="${escapeHtml(truck)}">Remove</button>
       </div>`;

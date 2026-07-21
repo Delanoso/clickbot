@@ -10,15 +10,12 @@ import {
   toAreaTerms,
 } from "../utils/depotMonitor.js";
 import { writeTaskStatus } from "../utils/taskStatus.js";
+import { truckIdsFromEntries } from "../web/depotConfig.js";
 
 export async function runDepotMonitor(config) {
   const monitor = config.depotMonitor || {};
   const trucks = [
-    ...new Set(
-      (monitor.trucks || [])
-        .map((truck) => String(truck || "").trim())
-        .filter(Boolean)
-    ),
+    ...new Set(truckIdsFromEntries(monitor.trucks || [])),
   ];
   const areaTerms = toAreaTerms(monitor);
   if (!trucks.length) {

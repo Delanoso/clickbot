@@ -11,6 +11,7 @@ import {
   removeDepotTruck,
   setDepotTrucks,
 } from "./depotConfig.js";
+import { fetchVehicleDriverName } from "./fetchVehicleDriver.js";
 import {
   getDepotSnapshot,
   getTask,
@@ -138,9 +139,18 @@ async function handleApi(req, res, url) {
     if (req.method === "POST") {
       const body = await readBody(req);
       const truck = body.truck || body.truckNumber;
-      const result = addDepotTruck(truck, CONFIG_PATH);
+      let driver = String(body.driver || "").trim();
+      let lookupError = null;
+      if (!driver && !body.skipLookup) {
+        try {
+          driver = await fetchVehicleDriverName(truck, CONFIG_PATH);
+        } catch (error) {
+          lookupError = error.message || String(error);
+        }
+      }
+      const result = addDepotTruck(truck, { driver, configPath: CONFIG_PATH });
       const restart = body.restart === false ? { restarted: false } : restartDepotIfRunning();
-      return sendJson(res, 200, { ...result, ...restart });
+      return sendJson(res, 200, { ...result, lookupError, ...restart });
     }
 
     if (req.method === "PUT") {

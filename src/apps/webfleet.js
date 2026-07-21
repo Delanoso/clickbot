@@ -25,6 +25,89 @@ export async function ensureWebfleetDrivers(page, appConfig) {
   await sleep(800);
 }
 
+export async function ensureWebfleetVehicles(page, appConfig) {
+  const workUrl =
+    appConfig.vehiclesUrl || "https://live-wf.webfleet.com/web/vehicles";
+  if (!/live-wf\.webfleet\.com\/web\/vehicles/i.test(page.url())) {
+    await page.goto(workUrl, { waitUntil: "domcontentloaded" });
+  }
+  await page.getByText(/VEHICLES/i).first().waitFor({ timeout: 60000 }).catch(() => {});
+  await sleep(800);
+}
+
+/**
+ * Search Webfleet Vehicles list by truck No. and return the Driver column name
+ * (phones stripped). Example: H2320 → "Ntuthuzelo Tantsi"
+ */
+export async function lookupVehicleDriverInWebfleet(page, selectors, truckNumber) {
+  await ensureWebfleetVehicles(page, { vehiclesUrl: "https://live-wf.webfleet.com/web/vehicles" });
+
+  const search = await resolveVehiclesSearchInput(page, selectors || {});
+  const query = String(truckNumber || "").trim();
+  if (!query) return "";
+
+  await search.fill("", { force: true });
+  await search.fill(query, { force: true });
+  await search.press("Enter");
+  await sleep(1200);
+
+  const raw = await page.evaluate((needle) => {
+    const normalize = (s) => String(s || "").replace(/\s+/g, " ").trim();
+    const table = document.querySelector("table");
+    const headers = table
+      ? [...table.querySelectorAll("thead th")].map((h) => normalize(h.innerText))
+      : [...document.querySelectorAll('[role="columnheader"]')].map((h) =>
+          normalize(h.innerText)
+        );
+
+    let noIdx = headers.findIndex((h) => /^No\.?$/i.test(h));
+    let driverIdx = headers.findIndex((h) => /^Driver$/i.test(h));
+    if (noIdx < 0) noIdx = 3;
+    if (driverIdx < 0) driverIdx = 5;
+
+    const rows = table
+      ? [...table.querySelectorAll("tbody tr")]
+      : [...document.querySelectorAll('[role="row"]')].filter(
+          (r) => r.querySelectorAll('[role="cell"]').length > 2
+        );
+
+    const wanted = needle.toUpperCase();
+    for (const tr of rows) {
+      const cells = [...tr.querySelectorAll(table ? "td" : '[role="cell"]')].map((c) =>
+        normalize(c.innerText)
+      );
+      const no = (cells[noIdx] || "").split(/\s+/)[0].toUpperCase();
+      if (no !== wanted) continue;
+      return cells[driverIdx] || "";
+    }
+    return "";
+  }, query);
+
+  return String(raw || "").replace(/\s+/g, " ").trim();
+}
+
+async function resolveVehiclesSearchInput(page, selectors) {
+  const preferred = page.locator("input.t3sel-vehicle-group-search").first();
+  if (await preferred.isVisible().catch(() => false)) {
+    return preferred;
+  }
+
+  const candidates = page.locator(
+    'input[placeholder="Search"], input[type="search"], input.t3sel-filterable-list-filter'
+  );
+  const count = await candidates.count();
+  for (let i = 0; i < count; i += 1) {
+    const candidate = candidates.nth(i);
+    if (await candidate.isVisible().catch(() => false)) return candidate;
+  }
+
+  if (selectors.searchInput) {
+    return locate(page, selectors.searchInput);
+  }
+
+  throw new Error("Could not find Webfleet Vehicles search input");
+}
+
 export async function ensureWebfleetDepotMonitor(page, appConfig, monitorConfig = {}) {
   const workUrl =
     monitorConfig.workUrl ||
