@@ -1,0 +1,159 @@
+import { createServer } from "node:http";
+import { readFileSync, existsSync, statSync } from "node:fs";
+import { extname, join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { networkInterfaces } from "node:os";
+import { loadEnvFile } from "../loadEnv.js";
+import {
+  getDepotSnapshot,
+  getTask,
+  listTasks,
+  readTaskLog,
+  startTask,
+  stopTask,
+} from "./taskManager.js";
+
+loadEnvFile();
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const publicDir = join(__dirname, "public");
+const PORT = Number(process.env.DASHBOARD_PORT || 8787);
+const HOST = process.env.DASHBOARD_HOST || "0.0.0.0";
+
+const MIME = {
+  ".html": "text/html; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".ico": "image/x-icon",
+};
+
+function sendJson(res, status, payload) {
+  const body = JSON.stringify(payload);
+  res.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+  });
+  res.end(body);
+}
+
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on("data", (chunk) => chunks.push(chunk));
+    req.on("end", () => {
+      const raw = Buffer.concat(chunks).toString("utf8");
+      if (!raw) return resolve({});
+      try {
+        resolve(JSON.parse(raw));
+      } catch (error) {
+        reject(error);
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
+function serveStatic(req, res, urlPath) {
+  let relative = urlPath === "/" ? "/index.html" : urlPath;
+  relative = relative.split("?")[0];
+  const filePath = join(publicDir, relative);
+  if (!filePath.startsWith(publicDir) || !existsSync(filePath) || statSync(filePath).isDirectory()) {
+    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Not found");
+    return;
+  }
+  const type = MIME[extname(filePath)] || "application/octet-stream";
+  res.writeHead(200, { "Content-Type": type });
+  res.end(readFileSync(filePath));
+}
+
+function localAddresses() {
+  const nets = networkInterfaces();
+  const out = [];
+  for (const entries of Object.values(nets)) {
+    for (const entry of entries || []) {
+      if (entry.family === "IPv4" && !entry.internal) out.push(entry.address);
+    }
+  }
+  return out;
+}
+
+async function handleApi(req, res, url) {
+  if (req.method === "GET" && url.pathname === "/api/health") {
+    return sendJson(res, 200, {
+      ok: true,
+      now: new Date().toISOString(),
+      host: HOST,
+      port: PORT,
+      addresses: localAddresses(),
+    });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/tasks") {
+    return sendJson(res, 200, { tasks: listTasks() });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/depot") {
+    return sendJson(res, 200, { depot: getDepotSnapshot() });
+  }
+
+  const taskMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)(?:\/(start|stop|logs))?$/);
+  if (taskMatch) {
+    const taskId = decodeURIComponent(taskMatch[1]);
+    const action = taskMatch[2] || null;
+
+    if (req.method === "GET" && !action) {
+      const task = getTask(taskId);
+      if (!task) return sendJson(res, 404, { error: "Task not found" });
+      return sendJson(res, 200, { task });
+    }
+
+    if (req.method === "GET" && action === "logs") {
+      const tail = Number(url.searchParams.get("tail") || 120);
+      return sendJson(res, 200, { lines: readTaskLog(taskId, { tail }) });
+    }
+
+    if (req.method === "POST" && action === "start") {
+      const body = await readBody(req).catch(() => ({}));
+      const task = startTask(taskId, {
+        configPath: body.configPath || "config/local.json",
+      });
+      return sendJson(res, 200, { task });
+    }
+
+    if (req.method === "POST" && action === "stop") {
+      const task = stopTask(taskId);
+      return sendJson(res, 200, { task });
+    }
+  }
+
+  return sendJson(res, 404, { error: "Unknown API route" });
+}
+
+const server = createServer(async (req, res) => {
+  try {
+    const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+    if (url.pathname.startsWith("/api/")) {
+      await handleApi(req, res, url);
+      return;
+    }
+    serveStatic(req, res, url.pathname);
+  } catch (error) {
+    sendJson(res, 500, { error: error.message || String(error) });
+  }
+});
+
+server.listen(PORT, HOST, () => {
+  const addresses = localAddresses();
+  console.log(`clickbot dashboard listening on http://${HOST}:${PORT}`);
+  if (addresses.length) {
+    for (const ip of addresses) {
+      console.log(`  → http://${ip}:${PORT}`);
+    }
+  } else {
+    console.log(`  → http://127.0.0.1:${PORT}`);
+  }
+});

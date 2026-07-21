@@ -11,6 +11,7 @@ import {
 } from "../apps/webfleet.js";
 import { openApps } from "../browser.js";
 import { resolveDriverName, shouldForceDefaultDriver } from "../utils/driverName.js";
+import { writeTaskStatus } from "../utils/taskStatus.js";
 
 /**
  * Task 1: allocate drivers to trucks (Lytx + Webfleet).
@@ -38,6 +39,14 @@ export async function runAllocateDrivers(config) {
   console.log(maxRuns > 0 ? `maxRuns=${maxRuns}` : "Running until the Assign Drivers queue is empty.");
   console.log("Press Ctrl+C to stop.\n");
 
+  writeTaskStatus("allocate-drivers", {
+    state: "running",
+    message: "Allocation loop started",
+    run: 0,
+    lastTruck: null,
+    lastDriver: null,
+  });
+
   try {
     while (config.loop?.enabled !== false) {
       run += 1;
@@ -48,6 +57,11 @@ export async function runAllocateDrivers(config) {
 
       if (!(await hasAssignableRows(lytx, config.apps.dispatch.selectors))) {
         console.log("No more vehicles left in Assign Drivers. Done.");
+        writeTaskStatus("allocate-drivers", {
+          state: "done",
+          message: "Queue empty",
+          run,
+        });
         break;
       }
 
@@ -90,6 +104,14 @@ export async function runAllocateDrivers(config) {
           suffix = ` (fallback: ${result.reason})`;
         }
         console.log(`Truck ${result.truckNumber} -> ${result.driverName}${suffix}`);
+        writeTaskStatus("allocate-drivers", {
+          state: "running",
+          message: `Assigned ${result.truckNumber}`,
+          run,
+          lastTruck: result.truckNumber,
+          lastDriver: result.driverName,
+          reason: result.reason || null,
+        });
 
         if (result.truckNumber === lastTruck) {
           sameTruckStreak += 1;
@@ -136,6 +158,10 @@ export async function runAllocateDrivers(config) {
       }
     }
   } finally {
+    writeTaskStatus("allocate-drivers", {
+      state: "stopped",
+      message: "Allocate task stopped",
+    });
     await browser.close();
   }
 }

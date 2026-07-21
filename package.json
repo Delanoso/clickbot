@@ -9,6 +9,7 @@
     "allocate": "node src/index.js allocate-drivers",
     "fyi": "node src/index.js fyi-notify",
     "depot": "node src/index.js depot-monitor",
+    "dashboard": "node src/web/server.js",
     "explore": "node src/explore.js",
     "demo:server": "node demo/server.js",
     "demo": "node scripts/run-demo.mjs",

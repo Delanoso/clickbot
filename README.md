@@ -153,6 +153,28 @@ Notes:
   `vehicleColumnName` / `locationColumnName` can be enough without detail
   selectors.
 
+## Personal dashboard (LAN / your IP)
+
+Host a small local web app to start/stop tasks and watch depot status:
+
+```bash
+npm run dashboard
+```
+
+Then open `http://YOUR_IP:8787` from a phone/laptop on the same network.
+
+The dashboard currently covers:
+
+1. **Allocate Drivers**
+2. **FYI Notify**
+3. **Depot Monitor** (live in-depot board)
+
+Default bind is `0.0.0.0:8787`. Override with:
+
+```bash
+DASHBOARD_HOST=0.0.0.0 DASHBOARD_PORT=8787 npm run dashboard
+```
+
 ## Run
 
 ```bash
@@ -184,14 +206,22 @@ config/
   demo.json             # local fake apps for npm run demo
 src/
   index.js              # entrypoint / task router
-  browser.js            # open both apps + login
+  browser.js            # open apps + login
+  web/
+    server.js           # personal LAN dashboard
+    public/             # dashboard UI
+    taskManager.js      # start/stop task processes
   apps/
     lytx.js             # Assign Drivers page actions
-    webfleet.js         # map search + driver lookup
+    webfleet.js         # map/drivers lookup helpers
   tasks/
     allocateDrivers.js  # task 1 loop
+    fyiNotify.js        # task 2 loop
+    depotMonitor.js     # task 3 loop
   utils/
     driverName.js       # name cleanup + fallback
+    depotMonitor.js     # area matching helpers
+    taskStatus.js       # runtime status files for dashboard
 ```
 
 More tasks can be added under `src/tasks/` and wired in `src/index.js`.

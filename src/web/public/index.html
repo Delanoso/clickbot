@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>clickbot</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="atmosphere" aria-hidden="true"></div>
+    <header class="hero">
+      <p class="eyebrow">Personal ops console</p>
+      <h1 class="brand">clickbot</h1>
+      <p class="lede">
+        Run allocate, FYI, and depot watch from your network IP. Add more tasks as we go.
+      </p>
+      <div class="hero-meta">
+        <span id="hostLine">Starting…</span>
+        <span id="clockLine"></span>
+      </div>
+    </header>
+
+    <main>
+      <section class="task-rail" aria-label="Tasks">
+        <article class="task-panel" data-task="allocate-drivers">
+          <div class="task-head">
+            <h2>Allocate Drivers</h2>
+            <span class="status-dot" data-role="dot"></span>
+          </div>
+          <p class="task-copy">Assign Webfleet driver Nos into Lytx unassigned vehicles.</p>
+          <dl class="task-stats">
+            <div><dt>State</dt><dd data-role="state">idle</dd></div>
+            <div><dt>Last</dt><dd data-role="detail">—</dd></div>
+          </dl>
+          <div class="task-actions">
+            <button type="button" class="btn primary" data-action="start">Start</button>
+            <button type="button" class="btn" data-action="stop">Stop</button>
+          </div>
+        </article>
+
+        <article class="task-panel" data-task="fyi-notify">
+          <div class="task-head">
+            <h2>FYI Notify</h2>
+            <span class="status-dot" data-role="dot"></span>
+          </div>
+          <p class="task-copy">Clear the Lytx FYI queue with Preview → Resolve → Confirm.</p>
+          <dl class="task-stats">
+            <div><dt>State</dt><dd data-role="state">idle</dd></div>
+            <div><dt>Remaining</dt><dd data-role="detail">—</dd></div>
+          </dl>
+          <div class="task-actions">
+            <button type="button" class="btn primary" data-action="start">Start</button>
+            <button type="button" class="btn" data-action="stop">Stop</button>
+          </div>
+        </article>
+
+        <article class="task-panel" data-task="depot-monitor">
+          <div class="task-head">
+            <h2>Depot Monitor</h2>
+            <span class="status-dot" data-role="dot"></span>
+          </div>
+          <p class="task-copy">Watch configured trucks and flag arrivals at Boksburg depot.</p>
+          <dl class="task-stats">
+            <div><dt>State</dt><dd data-role="state">idle</dd></div>
+            <div><dt>In depot</dt><dd data-role="detail">—</dd></div>
+          </dl>
+          <div class="task-actions">
+            <button type="button" class="btn primary" data-action="start">Start</button>
+            <button type="button" class="btn" data-action="stop">Stop</button>
+          </div>
+        </article>
+      </section>
+
+      <section class="depot-board" aria-label="Depot live board">
+        <div class="section-head">
+          <div>
+            <h2>Boksburg live</h2>
+            <p id="depotSummary">Waiting for monitor data…</p>
+          </div>
+          <div class="count-block">
+            <span class="count-label">In depot</span>
+            <strong id="inDepotCount">0</strong>
+          </div>
+        </div>
+        <div id="inDepotList" class="truck-list"></div>
+        <div class="section-subhead">
+          <h3>All watched</h3>
+          <p id="watchedMeta"></p>
+        </div>
+        <div id="allTruckList" class="truck-grid"></div>
+      </section>
+
+      <section class="log-board" aria-label="Task log">
+        <div class="section-head">
+          <div>
+            <h2>Activity</h2>
+            <p>Latest lines from the selected task.</p>
+          </div>
+          <div class="log-tabs" id="logTabs"></div>
+        </div>
+        <pre id="logView" class="log-view">Select a task to view logs.</pre>
+      </section>
+    </main>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

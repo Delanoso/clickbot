@@ -7,6 +7,7 @@ import {
   recoverFyiList,
   resolveOneFyiNotify,
 } from "../apps/lytxFyi.js";
+import { writeTaskStatus } from "../utils/taskStatus.js";
 
 /**
  * Task 2: clear Lytx FYI Notify items (Lytx only).
@@ -35,6 +36,13 @@ export async function runFyiNotify(config) {
   console.log("Lytx FYI Notify open. Starting resolve loop.");
   console.log(maxRuns > 0 ? `maxRuns=${maxRuns}` : "Running until no FYI Notify items remain.");
   console.log("Press Ctrl+C to stop.\n");
+
+  writeTaskStatus("fyi-notify", {
+    state: "running",
+    message: "FYI loop started",
+    run: 0,
+    remaining: null,
+  });
 
   try {
     while (config.loop?.enabled !== false) {
@@ -91,6 +99,12 @@ export async function runFyiNotify(config) {
             remainingAfter != null ? ` Remaining ~${remainingAfter}.` : ""
           }`
         );
+        writeTaskStatus("fyi-notify", {
+          state: "running",
+          message: "Resolved one FYI item",
+          run,
+          remaining: remainingAfter,
+        });
       } catch (error) {
         failStreak += 1;
         console.log(`FYI resolve failed (will retry): ${error.message || error}`);
@@ -118,6 +132,10 @@ export async function runFyiNotify(config) {
       }
     }
   } finally {
+    writeTaskStatus("fyi-notify", {
+      state: "stopped",
+      message: "FYI task stopped",
+    });
     await browser.close();
   }
 }

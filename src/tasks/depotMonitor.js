@@ -9,6 +9,7 @@ import {
   normalizeMonitorText,
   toAreaTerms,
 } from "../utils/depotMonitor.js";
+import { writeTaskStatus } from "../utils/taskStatus.js";
 
 export async function runDepotMonitor(config) {
   const monitor = config.depotMonitor || {};
@@ -30,6 +31,17 @@ export async function runDepotMonitor(config) {
   const pollIntervalMs = monitor.pollIntervalMs ?? 60000;
   const alertOnInitialMatch = monitor.alertOnInitialMatch ?? true;
   const state = new Map();
+  const alerts = [];
+
+  writeTaskStatus("depot-monitor", {
+    state: "starting",
+    message: "Opening Webfleet",
+    watchedCount: trucks.length,
+    areaTerms,
+    trucks: [],
+    inDepot: [],
+    cycle: 0,
+  });
 
   const { browser, page } = await openWebfleetOnly(config);
 
@@ -40,6 +52,18 @@ export async function runDepotMonitor(config) {
     console.log(`Watching ${trucks.length} truck(s) for area: ${areaTerms.join(", ")}`);
     console.log(`Polling every ${pollIntervalMs} ms.`);
     console.log("Press Ctrl+C to stop.\n");
+
+    writeTaskStatus("depot-monitor", {
+      state: "running",
+      message: "Polling Webfleet map",
+      watchedCount: trucks.length,
+      areaTerms,
+      pollIntervalMs,
+      trucks: [],
+      inDepot: [],
+      cycle: 0,
+      alerts,
+    });
 
     let cycle = 0;
     while (true) {
@@ -73,27 +97,107 @@ export async function runDepotMonitor(config) {
           (!previous
             ? alertOnInitialMatch
             : !previousInTargetArea ||
-              normalizeMonitorText(previous.locationText) !== normalizeMonitorText(locationText));
+              normalizeMonitorText(previous.locationText) !==
+                normalizeMonitorText(locationText));
 
         if (shouldAlert) {
-          console.log(
-            `\u0007ALERT: ${truckNumber} is in target area "${areaTerms[0]}"` +
-              (locationText ? ` (${locationText})` : "")
-          );
+          const alertText =
+            `${truckNumber} is in target area "${areaTerms[0]}"` +
+            (locationText ? ` (${locationText})` : "");
+          console.log(`\u0007ALERT: ${alertText}`);
+          alerts.unshift({
+            at: new Date().toISOString(),
+            truckNumber,
+            locationText,
+            message: alertText,
+          });
+          if (alerts.length > 30) alerts.length = 30;
         } else if (previousInTargetArea && !inTargetArea) {
           console.log(
             `INFO: ${truckNumber} left target area` +
               (locationText ? ` (${locationText})` : "")
           );
         }
+
+        publishDepotStatus({
+          state,
+          cycle,
+          trucks,
+          areaTerms,
+          pollIntervalMs,
+          alerts,
+          message: `Cycle ${cycle} — checking ${truckNumber}`,
+        });
       }
+
+      publishDepotStatus({
+        state,
+        cycle,
+        trucks,
+        areaTerms,
+        pollIntervalMs,
+        alerts,
+        message: `Cycle ${cycle} complete`,
+        cycleComplete: true,
+      });
 
       console.log("");
       await sleep(pollIntervalMs);
     }
   } finally {
+    writeTaskStatus("depot-monitor", {
+      state: "stopped",
+      message: "Monitor stopped",
+      watchedCount: trucks.length,
+      areaTerms,
+      trucks: snapshotTrucks(state, trucks),
+      inDepot: snapshotTrucks(state, trucks).filter((row) => row.inTargetArea),
+      cycle: 0,
+      alerts,
+    });
     await browser.close();
   }
+}
+
+function snapshotTrucks(state, trucks) {
+  return trucks.map((truckNumber) => {
+    const row = state.get(truckNumber);
+    return {
+      truckNumber,
+      locationText: row?.locationText || "",
+      inTargetArea: Boolean(row?.inTargetArea),
+      checkedAt: row?.checkedAt || null,
+      found: Boolean(row?.found),
+    };
+  });
+}
+
+function publishDepotStatus({
+  state,
+  cycle,
+  trucks,
+  areaTerms,
+  pollIntervalMs,
+  alerts,
+  message,
+  cycleComplete = false,
+}) {
+  const rows = snapshotTrucks(state, trucks);
+  const inDepot = rows.filter((row) => row.inTargetArea);
+  writeTaskStatus("depot-monitor", {
+    state: "running",
+    message,
+    watchedCount: trucks.length,
+    checkedCount: rows.filter((row) => row.checkedAt).length,
+    areaTerms,
+    pollIntervalMs,
+    cycle,
+    cycleComplete,
+    inDepotCount: inDepot.length,
+    trucks: rows,
+    inDepot,
+    alerts,
+  });
 }
 
 function sleep(ms) {
