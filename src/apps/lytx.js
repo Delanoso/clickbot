@@ -37,10 +37,12 @@ export async function ensureLytxAssignPage(page, appConfig) {
 
   const heading = locate(page, selectors.pageReady || { text: "ASSIGN DRIVERS" });
   await heading.waitFor({ state: "visible", timeout: 60000 });
+  // Rows may be empty when the queue is cleared — don't require them here.
   await page
     .locator(selectors.vehicleColumn || ".cdk-row.lytx-table-row .cdk-column-Vehicle")
     .first()
-    .waitFor({ state: "visible", timeout: 60000 });
+    .waitFor({ state: "visible", timeout: 8000 })
+    .catch(() => {});
 }
 
 function isOnAssignDrivers(url) {
