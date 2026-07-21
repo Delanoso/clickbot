@@ -10,9 +10,11 @@
   "depotMonitor": {
     "pollIntervalMs": 60000,
     "alertOnInitialMatch": true,
-    "targetArea": "depot",
+    "targetArea": "HFR - Boksburg Depot",
     "targetAreas": [
-      "main depot"
+      "HFR - Boksburg Depot",
+      "HFR - BOKSBURG DEPOT",
+      "Boksburg Depot"
     ],
     "trucks": [
       "H2512",

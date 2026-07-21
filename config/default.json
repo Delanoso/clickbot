@@ -10,8 +10,12 @@
   "depotMonitor": {
     "pollIntervalMs": 60000,
     "alertOnInitialMatch": true,
-    "targetArea": "depot",
-    "targetAreas": [],
+    "targetArea": "HFR - Boksburg Depot",
+    "targetAreas": [
+      "HFR - Boksburg Depot",
+      "HFR - BOKSBURG DEPOT",
+      "Boksburg Depot"
+    ],
     "trucks": [],
     "workUrl": "https://live-wf.webfleet.com/web/map",
     "searchDelayMs": 1500,
