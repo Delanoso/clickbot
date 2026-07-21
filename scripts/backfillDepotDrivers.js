@@ -1,27 +1,18 @@
 import { readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { loadEnvFile } from "../src/loadEnv.js";
 import { loadConfig } from "../src/config.js";
 import { openWebfleetOnly } from "../src/browser.js";
 import { lookupVehicleDriverInWebfleet } from "../src/apps/webfleet.js";
 import { cleanDriverName } from "../src/utils/driverName.js";
-import {
-  normalizeTruckEntries,
-} from "../src/web/depotConfig.js";
+import { normalizeTruckEntries } from "../src/web/depotConfig.js";
 
 loadEnvFile();
 
-const configPath = process.argv[2] || "config/local.json";
+const configPath = resolve(process.argv[2] || "config/local.json");
 const force = process.argv.includes("--force");
 
 const config = loadConfig({ configPath, relaxValidation: true });
-const absoluteConfigPath = configPath.startsWith("/")
-  ? configPath
-  : new URL(`../${configPath}`, import.meta.url).pathname.replace(
-      /^\/([A-Za-z]:)/,
-      "$1"
-    );
-
-// Prefer reading the same file we will write.
 const raw = JSON.parse(readFileSync(configPath, "utf8"));
 const trucks = normalizeTruckEntries(raw.depotMonitor?.trucks || []);
 if (!trucks.length) {
