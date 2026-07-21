@@ -133,6 +133,33 @@ export function removeDepotTruck(truckNumber, configPath = DEFAULT_CONFIG) {
   return { trucks, removed: true, truck };
 }
 
+/**
+ * Update driver for an existing truck only — never re-adds a removed truck.
+ */
+export function setDepotTruckDriver(
+  truckNumber,
+  driver,
+  configPath = DEFAULT_CONFIG
+) {
+  const truck = normalizeTruckId(truckNumber);
+  if (!truck) throw new Error("Truck number is required");
+
+  const current = readDepotConfig(configPath);
+  const existing = current.trucks.find((entry) => entry.id === truck);
+  if (!existing) {
+    return { updated: false, truck, driver: "", missing: true };
+  }
+
+  const driverName = String(driver || "").trim();
+  if (existing.driver === driverName) {
+    return { updated: false, truck, driver: existing.driver, missing: false };
+  }
+
+  existing.driver = driverName;
+  saveTruckEntries(current, current.trucks);
+  return { updated: true, truck, driver: driverName, missing: false };
+}
+
 export function setDepotTrucks(truckNumbers, configPath = DEFAULT_CONFIG) {
   const current = readDepotConfig(configPath);
   const previous = new Map(current.trucks.map((entry) => [entry.id, entry.driver]));

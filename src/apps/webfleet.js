@@ -46,10 +46,33 @@ export async function lookupVehicleDriverInWebfleet(page, selectors, truckNumber
   const query = String(truckNumber || "").trim();
   if (!query) return "";
 
-  await search.fill("", { force: true });
-  await search.fill(query, { force: true });
-  await search.press("Enter");
-  await sleep(1200);
+  await search.click({ force: true }).catch(() => {});
+  await search.fill("", { force: true }).catch(async () => {
+    await page.evaluate(() => {
+      const el =
+        document.querySelector("input.t3sel-vehicle-group-search") ||
+        document.querySelector('input[placeholder="Search"]');
+      if (el) {
+        el.focus();
+        el.value = "";
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    });
+  });
+  await search.type(query, { delay: 20 }).catch(async () => {
+    await page.evaluate((value) => {
+      const el =
+        document.querySelector("input.t3sel-vehicle-group-search") ||
+        document.querySelector('input[placeholder="Search"]');
+      if (!el) return;
+      el.focus();
+      el.value = value;
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    }, query);
+  });
+  await search.press("Enter").catch(() => {});
+  await sleep(1500);
 
   const raw = await page.evaluate((needle) => {
     const normalize = (s) => String(s || "").replace(/\s+/g, " ").trim();

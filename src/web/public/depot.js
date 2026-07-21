@@ -17,8 +17,20 @@ const logView = document.getElementById("logView");
 const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 
+/** Bumped to ignore stale poll responses after add/remove. */
+let refreshGeneration = 0;
+const removingTrucks = new Set();
+
 startBtn.addEventListener("click", () => controlTask("start"));
 stopBtn.addEventListener("click", () => controlTask("stop"));
+
+// Event delegation so Remove still works when the poll re-renders the list.
+watchList.addEventListener("click", (event) => {
+  const btn = event.target.closest("[data-remove]");
+  if (!btn || !watchList.contains(btn)) return;
+  event.preventDefault();
+  void removeTruck(btn.getAttribute("data-remove"));
+});
 
 addTruckForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -51,7 +63,7 @@ addTruckForm.addEventListener("submit", async (event) => {
         : `${data.truck} is already on the list`;
     }
     if (data.restarted) truckFormNote.textContent += " · monitor restarting";
-    await refresh();
+    await refresh({ force: true });
   } catch (error) {
     truckFormNote.textContent = error.message || String(error);
   } finally {
@@ -62,22 +74,43 @@ addTruckForm.addEventListener("submit", async (event) => {
 });
 
 async function removeTruck(truck) {
-  truckFormNote.textContent = `Removing ${truck}…`;
+  const id = String(truck || "").trim();
+  if (!id) return;
+  const key = id.toUpperCase();
+  if (removingTrucks.has(key)) return;
+  removingTrucks.add(key);
+
+  // Drop this row immediately and invalidate any in-flight poll paint.
+  refreshGeneration += 1;
+  const row = watchList.querySelector(`[data-remove="${cssEscape(id)}"]`)?.closest(".watch-row");
+  if (row) row.remove();
+  truckFormNote.textContent = `Removing ${id}…`;
+
   try {
-    const res = await fetch(`/api/depot/trucks/${encodeURIComponent(truck)}`, {
+    const res = await fetch(`/api/depot/trucks/${encodeURIComponent(id)}`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({}),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || "Could not remove truck");
     truckFormNote.textContent = data.removed
       ? `Removed ${data.truck}${data.restarted ? " · monitor restarting" : ""}`
-      : `${truck} was not on the list`;
-    await refresh();
+      : `${id} was not on the list`;
+    await refresh({ force: true });
   } catch (error) {
-    truckFormNote.textContent = error.message;
+    truckFormNote.textContent = error.message || String(error);
+    await refresh({ force: true });
+  } finally {
+    removingTrucks.delete(key);
   }
+}
+
+function cssEscape(value) {
+  if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
+    return CSS.escape(value);
+  }
+  return String(value).replace(/["\\]/g, "\\$&");
 }
 
 async function controlTask(action) {
@@ -87,7 +120,7 @@ async function controlTask(action) {
     const res = await fetch(`/api/tasks/depot-monitor/${action}`, { method: "POST" });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Request failed");
-    await refresh();
+    await refresh({ force: true });
   } catch (error) {
     logView.textContent = `Error: ${error.message}`;
   } finally {
@@ -182,20 +215,19 @@ function renderWatchList(trucks, liveRows = []) {
       } else if (!driver) {
         metaParts.push("Configured");
       }
+      const busy = removingTrucks.has(String(truck).toUpperCase());
       return `
       <div class="watch-row ${live?.inTargetArea ? "in" : ""}">
         <div>
           <strong>${escapeHtml(truck)}</strong>
           <span>${escapeHtml(metaParts.join(" · "))}</span>
         </div>
-        <button type="button" class="btn danger-btn" data-remove="${escapeHtml(truck)}">Remove</button>
+        <button type="button" class="btn danger-btn" data-remove="${escapeAttr(truck)}" ${
+          busy ? "disabled" : ""
+        }>Remove</button>
       </div>`;
     })
     .join("");
-
-  watchList.querySelectorAll("[data-remove]").forEach((btn) => {
-    btn.addEventListener("click", () => removeTruck(btn.getAttribute("data-remove")));
-  });
 }
 
 async function refreshLogs() {
@@ -208,13 +240,21 @@ async function refreshLogs() {
   }
 }
 
-async function refresh() {
+async function refresh({ force = false } = {}) {
+  const generation = force ? ++refreshGeneration : refreshGeneration + 1;
+  if (!force) refreshGeneration = generation;
+
   const [healthRes, depotRes] = await Promise.all([
     fetch("/api/health"),
     fetch("/api/depot"),
   ]);
+
+  // A newer refresh (add/remove or later poll) won — discard this paint.
+  if (generation !== refreshGeneration) return;
+
   const health = await healthRes.json();
   const depotPayload = await depotRes.json();
+  if (generation !== refreshGeneration) return;
 
   const ip = (health.addresses && health.addresses[0]) || location.hostname;
   hostLine.textContent = `http://${ip}${location.port ? `:${location.port}` : ""}/depot`;
@@ -243,5 +283,9 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;");
 }
 
-refresh();
-setInterval(refresh, 4000);
+function escapeAttr(value) {
+  return escapeHtml(value).replaceAll("'", "&#39;");
+}
+
+refresh({ force: true });
+setInterval(() => refresh(), 4000);

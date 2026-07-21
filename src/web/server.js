@@ -9,6 +9,7 @@ import {
   listDepotTrucks,
   readDepotConfig,
   removeDepotTruck,
+  setDepotTruckDriver,
   setDepotTrucks,
 } from "./depotConfig.js";
 import { fetchVehicleDriverName } from "./fetchVehicleDriver.js";
@@ -105,13 +106,24 @@ function restartDepotIfRunning() {
 }
 
 const driverLookupQueue = [];
+/** Trucks cancelled while a lookup was queued or in flight (e.g. user removed them). */
+const cancelledDriverLookups = new Set();
 let driverLookupRunning = false;
 
 function queueDriverLookup(truckNumber) {
   const truck = String(truckNumber || "").trim().toUpperCase();
   if (!truck) return;
+  cancelledDriverLookups.delete(truck);
   if (!driverLookupQueue.includes(truck)) driverLookupQueue.push(truck);
   void processDriverLookupQueue();
+}
+
+function cancelDriverLookup(truckNumber) {
+  const truck = String(truckNumber || "").trim().toUpperCase();
+  if (!truck) return;
+  cancelledDriverLookups.add(truck);
+  const idx = driverLookupQueue.indexOf(truck);
+  if (idx >= 0) driverLookupQueue.splice(idx, 1);
 }
 
 async function processDriverLookupQueue() {
@@ -120,12 +132,26 @@ async function processDriverLookupQueue() {
   try {
     while (driverLookupQueue.length) {
       const truck = driverLookupQueue.shift();
+      if (cancelledDriverLookups.has(truck)) {
+        cancelledDriverLookups.delete(truck);
+        continue;
+      }
       try {
         console.log(`[depot] Looking up driver for ${truck}...`);
         const driver = await fetchVehicleDriverName(truck, CONFIG_PATH);
+        if (cancelledDriverLookups.has(truck)) {
+          cancelledDriverLookups.delete(truck);
+          console.log(`[depot] ${truck} lookup discarded (truck removed)`);
+          continue;
+        }
         if (driver) {
-          addDepotTruck(truck, { driver, configPath: CONFIG_PATH });
-          console.log(`[depot] ${truck} -> ${driver}`);
+          // Never re-add a truck the user already removed.
+          const result = setDepotTruckDriver(truck, driver, CONFIG_PATH);
+          if (result.missing) {
+            console.log(`[depot] ${truck} -> ${driver} (skipped, not on list)`);
+          } else {
+            console.log(`[depot] ${truck} -> ${driver}`);
+          }
         } else {
           console.log(`[depot] ${truck} -> (no driver)`);
         }
@@ -137,6 +163,7 @@ async function processDriverLookupQueue() {
     }
   } finally {
     driverLookupRunning = false;
+    if (driverLookupQueue.length) void processDriverLookupQueue();
   }
 }
 
@@ -211,6 +238,7 @@ async function handleApi(req, res, url) {
   if (truckMatch && req.method === "DELETE") {
     const truck = decodeURIComponent(truckMatch[1]);
     const body = await readBody(req).catch(() => ({}));
+    cancelDriverLookup(truck);
     const result = removeDepotTruck(truck, CONFIG_PATH);
     const restart = body.restart === false ? { restarted: false } : restartDepotIfRunning();
     return sendJson(res, 200, { ...result, ...restart });

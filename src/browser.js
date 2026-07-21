@@ -67,13 +67,28 @@ export async function openLytxOnly(config) {
   return { browser, context, page };
 }
 
+const LOW_MEMORY_CHROMIUM_ARGS = [
+  "--disable-dev-shm-usage",
+  "--disable-gpu",
+  "--disable-extensions",
+  "--disable-background-networking",
+  "--disable-default-apps",
+  "--disable-sync",
+  "--disable-translate",
+  "--mute-audio",
+  "--no-first-run",
+  "--font-render-hinting=none",
+];
+
 /**
  * Webfleet-only browser session (for tasks that do not need Lytx).
+ * @param {{ lowMemory?: boolean }} [options]
  */
-export async function openWebfleetOnly(config) {
+export async function openWebfleetOnly(config, options = {}) {
   const browser = await chromium.launch({
     headless: Boolean(config.headless),
     slowMo: config.slowMoMs ?? 0,
+    args: options.lowMemory ? LOW_MEMORY_CHROMIUM_ARGS : undefined,
   });
 
   const context = await browser.newContext();
