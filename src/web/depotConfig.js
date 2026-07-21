@@ -1,4 +1,13 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import {
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  openSync,
+  closeSync,
+  unlinkSync,
+  statSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -16,6 +25,57 @@ function loadJson(path) {
 function saveJson(path, data) {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
+}
+
+function sleepSync(ms) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    /* spin — serialize truck-list writes across dashboard + scripts */
+  }
+}
+
+/**
+ * Cross-process lock so a backfill script cannot rewrite trucks the UI just removed.
+ */
+function withConfigLock(configPath, fn) {
+  const path = resolveConfigPath(configPath);
+  const lockPath = `${path}.lock`;
+  const started = Date.now();
+  let fd;
+  while (fd == null) {
+    try {
+      fd = openSync(lockPath, "wx");
+      writeFileSync(fd, `${process.pid}\n`);
+    } catch (error) {
+      if (error && error.code !== "EEXIST") throw error;
+      if (Date.now() - started > 15000) {
+        throw new Error(`Timed out waiting for config lock: ${lockPath}`);
+      }
+      try {
+        if (existsSync(lockPath) && Date.now() - statSync(lockPath).mtimeMs > 120000) {
+          unlinkSync(lockPath);
+          continue;
+        }
+      } catch {
+        /* ignore */
+      }
+      sleepSync(40);
+    }
+  }
+  try {
+    return fn(path);
+  } finally {
+    try {
+      closeSync(fd);
+    } catch {
+      /* ignore */
+    }
+    try {
+      unlinkSync(lockPath);
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 export function normalizeTruckId(value) {
@@ -82,11 +142,15 @@ export function listDepotTrucks(configPath = DEFAULT_CONFIG) {
 }
 
 function saveTruckEntries(current, trucks) {
-  current.config.depotMonitor = {
-    ...(current.config.depotMonitor || {}),
+  // Re-read so we do not clobber unrelated config fields edited elsewhere.
+  const latest = loadJson(current.path);
+  latest.depotMonitor = {
+    ...(latest.depotMonitor || {}),
     trucks,
   };
-  saveJson(current.path, current.config);
+  saveJson(current.path, latest);
+  current.config = latest;
+  current.trucks = trucks;
 }
 
 export function addDepotTruck(
@@ -97,40 +161,50 @@ export function addDepotTruck(
   if (!truck) throw new Error("Truck number is required");
   const driverName = String(driver || "").trim();
 
-  const current = readDepotConfig(configPath);
-  const existing = current.trucks.find((entry) => entry.id === truck);
-  if (existing) {
-    if (driverName && existing.driver !== driverName) {
-      existing.driver = driverName;
-      saveTruckEntries(current, current.trucks);
-      return { trucks: current.trucks, added: false, updated: true, truck, driver: driverName };
+  return withConfigLock(configPath, () => {
+    const current = readDepotConfig(configPath);
+    const existing = current.trucks.find((entry) => entry.id === truck);
+    if (existing) {
+      if (driverName && existing.driver !== driverName) {
+        existing.driver = driverName;
+        saveTruckEntries(current, current.trucks);
+        return {
+          trucks: current.trucks,
+          added: false,
+          updated: true,
+          truck,
+          driver: driverName,
+        };
+      }
+      return {
+        trucks: current.trucks,
+        added: false,
+        updated: false,
+        truck,
+        driver: existing.driver || "",
+      };
     }
-    return {
-      trucks: current.trucks,
-      added: false,
-      updated: false,
-      truck,
-      driver: existing.driver || "",
-    };
-  }
 
-  const trucks = [...current.trucks, { id: truck, driver: driverName }];
-  saveTruckEntries(current, trucks);
-  return { trucks, added: true, updated: false, truck, driver: driverName };
+    const trucks = [...current.trucks, { id: truck, driver: driverName }];
+    saveTruckEntries(current, trucks);
+    return { trucks, added: true, updated: false, truck, driver: driverName };
+  });
 }
 
 export function removeDepotTruck(truckNumber, configPath = DEFAULT_CONFIG) {
   const truck = normalizeTruckId(truckNumber);
   if (!truck) throw new Error("Truck number is required");
 
-  const current = readDepotConfig(configPath);
-  const trucks = current.trucks.filter((entry) => entry.id !== truck);
-  if (trucks.length === current.trucks.length) {
-    return { trucks: current.trucks, removed: false, truck };
-  }
+  return withConfigLock(configPath, () => {
+    const current = readDepotConfig(configPath);
+    const trucks = current.trucks.filter((entry) => entry.id !== truck);
+    if (trucks.length === current.trucks.length) {
+      return { trucks: current.trucks, removed: false, truck };
+    }
 
-  saveTruckEntries(current, trucks);
-  return { trucks, removed: true, truck };
+    saveTruckEntries(current, trucks);
+    return { trucks, removed: true, truck };
+  });
 }
 
 /**
@@ -144,29 +218,33 @@ export function setDepotTruckDriver(
   const truck = normalizeTruckId(truckNumber);
   if (!truck) throw new Error("Truck number is required");
 
-  const current = readDepotConfig(configPath);
-  const existing = current.trucks.find((entry) => entry.id === truck);
-  if (!existing) {
-    return { updated: false, truck, driver: "", missing: true };
-  }
+  return withConfigLock(configPath, () => {
+    const current = readDepotConfig(configPath);
+    const existing = current.trucks.find((entry) => entry.id === truck);
+    if (!existing) {
+      return { updated: false, truck, driver: "", missing: true };
+    }
 
-  const driverName = String(driver || "").trim();
-  if (existing.driver === driverName) {
-    return { updated: false, truck, driver: existing.driver, missing: false };
-  }
+    const driverName = String(driver || "").trim();
+    if (existing.driver === driverName) {
+      return { updated: false, truck, driver: existing.driver, missing: false };
+    }
 
-  existing.driver = driverName;
-  saveTruckEntries(current, current.trucks);
-  return { updated: true, truck, driver: driverName, missing: false };
+    existing.driver = driverName;
+    saveTruckEntries(current, current.trucks);
+    return { updated: true, truck, driver: driverName, missing: false };
+  });
 }
 
 export function setDepotTrucks(truckNumbers, configPath = DEFAULT_CONFIG) {
-  const current = readDepotConfig(configPath);
-  const previous = new Map(current.trucks.map((entry) => [entry.id, entry.driver]));
-  const trucks = normalizeTruckEntries(truckNumbers).map((entry) => ({
-    id: entry.id,
-    driver: entry.driver || previous.get(entry.id) || "",
-  }));
-  saveTruckEntries(current, trucks);
-  return { trucks };
+  return withConfigLock(configPath, () => {
+    const current = readDepotConfig(configPath);
+    const previous = new Map(current.trucks.map((entry) => [entry.id, entry.driver]));
+    const trucks = normalizeTruckEntries(truckNumbers).map((entry) => ({
+      id: entry.id,
+      driver: entry.driver || previous.get(entry.id) || "",
+    }));
+    saveTruckEntries(current, trucks);
+    return { trucks };
+  });
 }
