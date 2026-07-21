@@ -67,6 +67,31 @@ export async function openLytxOnly(config) {
   return { browser, context, page };
 }
 
+/**
+ * Webfleet-only browser session (for tasks that do not need Lytx).
+ */
+export async function openWebfleetOnly(config) {
+  const browser = await chromium.launch({
+    headless: Boolean(config.headless),
+    slowMo: config.slowMoMs ?? 0,
+  });
+
+  const context = await browser.newContext();
+  const page = await context.newPage();
+
+  const fleetUrl = config.apps.fleet?.url;
+  if (!fleetUrl || String(fleetUrl).includes("example.com")) {
+    throw new Error("apps.fleet.url is required for Webfleet-only tasks");
+  }
+
+  await page.goto(fleetUrl, {
+    waitUntil: "domcontentloaded",
+  });
+  await maybeLogin(page, config.apps.fleet, "fleet");
+
+  return { browser, context, page };
+}
+
 export async function readText(page, selector, { timeout = 15000 } = {}) {
   const locator = page.locator(selector).first();
   await locator.waitFor({ state: "visible", timeout });

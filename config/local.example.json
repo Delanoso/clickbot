@@ -7,6 +7,33 @@
     "delayBetweenRunsMs": 2000,
     "maxRuns": 0
   },
+  "depotMonitor": {
+    "pollIntervalMs": 60000,
+    "alertOnInitialMatch": true,
+    "targetArea": "depot",
+    "targetAreas": [
+      "main depot"
+    ],
+    "trucks": [
+      "H2512",
+      "NH2482"
+    ],
+    "workUrl": "https://live-wf.webfleet.com/web/map",
+    "searchDelayMs": 1500,
+    "resultDelayMs": 1000,
+    "selectors": {
+      "searchInput": {
+        "placeholder": "Search"
+      },
+      "resultItem": null,
+      "locationText": null,
+      "detailText": null,
+      "resultRow": null,
+      "vehicleColumnName": "Vehicle",
+      "locationColumnName": "Location",
+      "locationColumnIndex": null
+    }
+  },
   "apps": {
     "dispatch": {
       "url": "https://login.lytx.com",

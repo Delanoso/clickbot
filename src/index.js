@@ -2,6 +2,7 @@ import { loadEnvFile } from "./loadEnv.js";
 import { loadConfig } from "./config.js";
 import { runAllocateDrivers } from "./tasks/allocateDrivers.js";
 import { runFyiNotify } from "./tasks/fyiNotify.js";
+import { runDepotMonitor } from "./tasks/depotMonitor.js";
 
 loadEnvFile();
 
@@ -43,9 +44,12 @@ async function main() {
     case "fyi-notify":
       await runFyiNotify(config);
       break;
+    case "depot-monitor":
+      await runDepotMonitor(config);
+      break;
     default:
       console.error(`Unknown task: ${args.task}`);
-      console.error("Available tasks: allocate-drivers, fyi-notify");
+      console.error("Available tasks: allocate-drivers, fyi-notify, depot-monitor");
       process.exitCode = 1;
   }
 }

@@ -100,6 +100,59 @@ Same Lytx login. From the Driver Safety dashboard:
 npm run fyi
 ```
 
+## Task 3: Depot monitor (Webfleet only)
+
+This task watches a list of trucks in Webfleet and alerts when one of them
+enters a target area such as your depot.
+
+How it works:
+
+1. Open Webfleet
+2. Search each configured truck
+3. Read its visible location/area text
+4. If that text contains your configured depot term(s), print an **ALERT**
+5. Keep polling on a timer and only alert again when a truck newly enters
+
+Example `config/local.json`:
+
+```json
+{
+  "depotMonitor": {
+    "pollIntervalMs": 60000,
+    "targetArea": "depot",
+    "targetAreas": ["main depot"],
+    "trucks": ["H2512", "NH2482"],
+    "workUrl": "https://live-wf.webfleet.com/web/map",
+    "selectors": {
+      "searchInput": { "placeholder": "Search" },
+      "locationText": null,
+      "detailText": null,
+      "resultItem": null,
+      "resultRow": null,
+      "vehicleColumnName": "Vehicle",
+      "locationColumnName": "Location",
+      "locationColumnIndex": null
+    }
+  }
+}
+```
+
+Run it with:
+
+```bash
+npm run depot
+```
+
+Notes:
+
+- `targetArea` / `targetAreas` are simple case-insensitive text matches.
+- The alert is printed to the terminal with a bell character.
+- If Webfleet needs custom selectors for the visible location text, add them in
+  `depotMonitor.selectors.locationText` or `detailText`.
+- If your Webfleet view is table-based, `resultRow` plus
+  `vehicleColumnName` / `locationColumnName` can be enough without detail
+  selectors.
+
 ## Run
 
 ```bash

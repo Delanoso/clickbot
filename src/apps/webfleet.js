@@ -25,6 +25,21 @@ export async function ensureWebfleetDrivers(page, appConfig) {
   await sleep(800);
 }
 
+export async function ensureWebfleetDepotMonitor(page, appConfig, monitorConfig = {}) {
+  const workUrl =
+    monitorConfig.workUrl ||
+    appConfig.monitor?.workUrl ||
+    "https://live-wf.webfleet.com/web/map";
+
+  if (!page.url().startsWith(workUrl)) {
+    await page.goto(workUrl, { waitUntil: "domcontentloaded" });
+  }
+
+  const search = await resolveMonitorSearchInput(page, appConfig, monitorConfig);
+  await search.waitFor({ state: "visible", timeout: 60000 });
+  await sleep(800);
+}
+
 /**
  * Search the Drivers list and return the driver "No." (e.g. D3309).
  */
@@ -65,6 +80,41 @@ export async function lookupDriverInWebfleet(page, selectors, truckNumber) {
   }
 
   return "";
+}
+
+export async function lookupTruckAreaInWebfleet(page, appConfig, truckNumber, monitorConfig = {}) {
+  const selectors = monitorConfig.selectors || {};
+  const search = await resolveMonitorSearchInput(page, appConfig, monitorConfig);
+  const query = String(truckNumber || "").trim();
+  if (!query) {
+    return { found: false, locationText: "", rawText: "", source: "empty_query" };
+  }
+
+  await search.fill("", { force: true });
+  await search.fill(query, { force: true });
+  await search.press("Enter").catch(() => {});
+  await sleep(monitorConfig.searchDelayMs ?? 1500);
+
+  await clickMonitorResultIfPresent(page, selectors);
+  await sleep(monitorConfig.resultDelayMs ?? 1000);
+
+  const locationText =
+    (await readFirstVisibleText(page, selectors.locationText, { timeout: 2500 })) ||
+    (await readLocationFromTable(page, query, selectors)) ||
+    "";
+
+  const detailText = await readFirstVisibleText(page, selectors.detailText, {
+    timeout: 1500,
+    allowMany: true,
+  });
+
+  const rawText = [locationText, detailText].filter(Boolean).join(" | ");
+  return {
+    found: Boolean(locationText || detailText),
+    locationText: locationText || detailText || "",
+    rawText,
+    source: locationText ? "locationText" : detailText ? "detailText" : "none",
+  };
 }
 
 async function searchAndReadDriverNo(page, search, selectors, query, tokens) {
@@ -251,6 +301,128 @@ async function resolveDriversSearchInput(page, selectors) {
   const forced = candidates.last();
   await forced.waitFor({ state: "attached", timeout: 10000 });
   return forced;
+}
+
+async function resolveMonitorSearchInput(page, appConfig, monitorConfig) {
+  const selector =
+    monitorConfig.selectors?.searchInput ||
+    appConfig.monitor?.selectors?.searchInput ||
+    appConfig.selectors?.searchInput;
+
+  if (selector) {
+    const locator = locate(page, selector);
+    try {
+      await locator.waitFor({ state: "visible", timeout: 5000 });
+      return locator;
+    } catch {
+      // continue to generic fallback
+    }
+  }
+
+  return resolveDriversSearchInput(page, appConfig.selectors || {});
+}
+
+async function clickMonitorResultIfPresent(page, selectors) {
+  const resultSelector = selectors.resultItem;
+  if (!resultSelector) return false;
+
+  try {
+    const result = locate(page, resultSelector);
+    await result.waitFor({ state: "visible", timeout: 2500 });
+    await result.click();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function readFirstVisibleText(page, selector, { timeout = 2500, allowMany = false } = {}) {
+  if (!selector) return "";
+
+  const selectors = Array.isArray(selector) ? selector : [selector];
+  for (const item of selectors) {
+    try {
+      const locator = locate(page, item);
+      await locator.waitFor({ state: "visible", timeout });
+      const text = allowMany ? await locator.allInnerTexts() : [await locator.innerText()];
+      const value = text
+        .map((entry) => String(entry || "").replace(/\s+/g, " ").trim())
+        .filter(Boolean)
+        .join(" | ");
+      if (value) return value;
+    } catch {
+      // try next selector
+    }
+  }
+
+  return "";
+}
+
+async function readLocationFromTable(page, truckNumber, selectors) {
+  try {
+    const raw = await page.evaluate(
+      ({
+        truckNumber,
+        resultRow,
+        vehicleColumnName,
+        locationColumnName,
+        locationColumnIndex,
+      }) => {
+        const normalize = (s) => String(s || "").replace(/\s+/g, " ").trim();
+        const query = normalize(truckNumber).toLowerCase();
+        const rows = resultRow
+          ? [...document.querySelectorAll(resultRow)]
+          : [...document.querySelectorAll("table tbody tr, [role='row']")];
+
+        for (const row of rows) {
+          const cells = [...row.querySelectorAll("td, [role='cell']")].map((cell) =>
+            normalize(cell.innerText)
+          );
+          if (!cells.length) continue;
+
+          const rowText = cells.join(" ").toLowerCase();
+          if (!rowText.includes(query)) continue;
+
+          if (vehicleColumnName && locationColumnName) {
+            const table = row.closest("table");
+            const headers = table
+              ? [...table.querySelectorAll("thead th")].map((th) => normalize(th.innerText))
+              : [];
+            const vehicleIdx = headers.findIndex(
+              (header) => normalize(header).toLowerCase() === normalize(vehicleColumnName).toLowerCase()
+            );
+            const locationIdx = headers.findIndex(
+              (header) => normalize(header).toLowerCase() === normalize(locationColumnName).toLowerCase()
+            );
+            if (vehicleIdx >= 0 && locationIdx >= 0) {
+              const vehicleValue = cells[vehicleIdx] || "";
+              if (vehicleValue.toLowerCase().includes(query)) {
+                return cells[locationIdx] || "";
+              }
+            }
+          }
+
+          const preferredIndex = Number.isInteger(locationColumnIndex)
+            ? locationColumnIndex
+            : cells.length - 1;
+          return cells[preferredIndex] || cells.join(" | ");
+        }
+
+        return "";
+      },
+      {
+        truckNumber,
+        resultRow: typeof selectors.resultRow === "string" ? selectors.resultRow : null,
+        vehicleColumnName: selectors.vehicleColumnName || "Vehicle",
+        locationColumnName: selectors.locationColumnName || "Location",
+        locationColumnIndex: selectors.locationColumnIndex,
+      }
+    );
+
+    return String(raw || "").replace(/\s+/g, " ").trim();
+  } catch {
+    return "";
+  }
 }
 
 function sleep(ms) {
