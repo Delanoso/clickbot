@@ -5,6 +5,13 @@ import { fileURLToPath } from "node:url";
 import { networkInterfaces } from "node:os";
 import { loadEnvFile } from "../loadEnv.js";
 import {
+  addDepotTruck,
+  listDepotTrucks,
+  readDepotConfig,
+  removeDepotTruck,
+  setDepotTrucks,
+} from "./depotConfig.js";
+import {
   getDepotSnapshot,
   getTask,
   listTasks,
@@ -19,6 +26,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(__dirname, "public");
 const PORT = Number(process.env.DASHBOARD_PORT || 8787);
 const HOST = process.env.DASHBOARD_HOST || "0.0.0.0";
+const CONFIG_PATH = process.env.CLICKBOT_CONFIG || "config/local.json";
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -58,6 +66,7 @@ function readBody(req) {
 
 function serveStatic(req, res, urlPath) {
   let relative = urlPath === "/" ? "/index.html" : urlPath;
+  if (relative === "/depot" || relative === "/depot/") relative = "/depot.html";
   relative = relative.split("?")[0];
   const filePath = join(publicDir, relative);
   if (!filePath.startsWith(publicDir) || !existsSync(filePath) || statSync(filePath).isDirectory()) {
@@ -81,6 +90,19 @@ function localAddresses() {
   return out;
 }
 
+function restartDepotIfRunning() {
+  const task = getTask("depot-monitor");
+  if (!task?.running) {
+    return { restarted: false, task };
+  }
+  stopTask("depot-monitor");
+  // Give the child a moment to exit before relaunching with new truck list.
+  setTimeout(() => {
+    startTask("depot-monitor", { configPath: CONFIG_PATH });
+  }, 1200);
+  return { restarted: true, task: getTask("depot-monitor") };
+}
+
 async function handleApi(req, res, url) {
   if (req.method === "GET" && url.pathname === "/api/health") {
     return sendJson(res, 200, {
@@ -97,7 +119,45 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/depot") {
-    return sendJson(res, 200, { depot: getDepotSnapshot() });
+    const config = readDepotConfig(CONFIG_PATH);
+    return sendJson(res, 200, {
+      depot: getDepotSnapshot(),
+      trucks: config.trucks,
+      targetArea: config.targetArea,
+      targetAreas: config.targetAreas,
+      pollIntervalMs: config.pollIntervalMs,
+      task: getTask("depot-monitor"),
+    });
+  }
+
+  if (url.pathname === "/api/depot/trucks") {
+    if (req.method === "GET") {
+      return sendJson(res, 200, { trucks: listDepotTrucks(CONFIG_PATH) });
+    }
+
+    if (req.method === "POST") {
+      const body = await readBody(req);
+      const truck = body.truck || body.truckNumber;
+      const result = addDepotTruck(truck, CONFIG_PATH);
+      const restart = body.restart === false ? { restarted: false } : restartDepotIfRunning();
+      return sendJson(res, 200, { ...result, ...restart });
+    }
+
+    if (req.method === "PUT") {
+      const body = await readBody(req);
+      const result = setDepotTrucks(body.trucks || [], CONFIG_PATH);
+      const restart = body.restart === false ? { restarted: false } : restartDepotIfRunning();
+      return sendJson(res, 200, { ...result, ...restart });
+    }
+  }
+
+  const truckMatch = url.pathname.match(/^\/api\/depot\/trucks\/([^/]+)$/);
+  if (truckMatch && req.method === "DELETE") {
+    const truck = decodeURIComponent(truckMatch[1]);
+    const body = await readBody(req).catch(() => ({}));
+    const result = removeDepotTruck(truck, CONFIG_PATH);
+    const restart = body.restart === false ? { restarted: false } : restartDepotIfRunning();
+    return sendJson(res, 200, { ...result, ...restart });
   }
 
   const taskMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)(?:\/(start|stop|logs))?$/);
@@ -119,7 +179,7 @@ async function handleApi(req, res, url) {
     if (req.method === "POST" && action === "start") {
       const body = await readBody(req).catch(() => ({}));
       const task = startTask(taskId, {
-        configPath: body.configPath || "config/local.json",
+        configPath: body.configPath || CONFIG_PATH,
       });
       return sendJson(res, 200, { task });
     }

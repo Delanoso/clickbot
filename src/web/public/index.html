@@ -15,10 +15,14 @@
   <body>
     <div class="atmosphere" aria-hidden="true"></div>
     <header class="hero">
+      <nav class="top-nav">
+        <a class="nav-link active" href="/">Home</a>
+        <a class="nav-link" href="/depot">Depot Monitor</a>
+      </nav>
       <p class="eyebrow">Personal ops console</p>
       <h1 class="brand">clickbot</h1>
       <p class="lede">
-        Run allocate, FYI, and depot watch from your network IP. Add more tasks as we go.
+        Run allocate and FYI from here. Depot watch lives on its own page.
       </p>
       <div class="hero-meta">
         <span id="hostLine">Starting…</span>
@@ -60,47 +64,29 @@
           </div>
         </article>
 
-        <article class="task-panel" data-task="depot-monitor">
+        <article class="task-panel task-panel-link">
           <div class="task-head">
             <h2>Depot Monitor</h2>
-            <span class="status-dot" data-role="dot"></span>
+            <span class="status-dot" id="depotDot"></span>
           </div>
-          <p class="task-copy">Watch configured trucks and flag arrivals at Boksburg depot.</p>
+          <p class="task-copy">
+            Boksburg live board, alerts, and truck watch list on a dedicated page.
+          </p>
           <dl class="task-stats">
-            <div><dt>State</dt><dd data-role="state">idle</dd></div>
-            <div><dt>In depot</dt><dd data-role="detail">—</dd></div>
+            <div><dt>State</dt><dd id="depotState">idle</dd></div>
+            <div><dt>In depot</dt><dd id="depotDetail">—</dd></div>
           </dl>
           <div class="task-actions">
-            <button type="button" class="btn primary" data-action="start">Start</button>
-            <button type="button" class="btn" data-action="stop">Stop</button>
+            <a class="btn primary" href="/depot">Open depot page</a>
           </div>
         </article>
-      </section>
-
-      <section class="depot-board" aria-label="Depot live board">
-        <div class="section-head">
-          <div>
-            <h2>Boksburg live</h2>
-            <p id="depotSummary">Waiting for monitor data…</p>
-          </div>
-          <div class="count-block">
-            <span class="count-label">In depot</span>
-            <strong id="inDepotCount">0</strong>
-          </div>
-        </div>
-        <div id="inDepotList" class="truck-list"></div>
-        <div class="section-subhead">
-          <h3>All watched</h3>
-          <p id="watchedMeta"></p>
-        </div>
-        <div id="allTruckList" class="truck-grid"></div>
       </section>
 
       <section class="log-board" aria-label="Task log">
         <div class="section-head">
           <div>
             <h2>Activity</h2>
-            <p>Latest lines from the selected task.</p>
+            <p>Latest lines from allocate or FYI.</p>
           </div>
           <div class="log-tabs" id="logTabs"></div>
         </div>
