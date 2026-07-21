@@ -55,7 +55,22 @@ export async function runAllocateDrivers(config) {
         break;
       }
 
-      if (!(await hasAssignableRows(lytx, config.apps.dispatch.selectors))) {
+      // Always land on Assign Drivers with filters cleared before deciding
+      // the queue is empty — a leftover vehicle chip shows 0 rows after one assign.
+      await lytx.bringToFront();
+      await ensureLytxAssignPage(lytx, config.apps.dispatch);
+      await clearLytxVehicleFilter(lytx, config.apps.dispatch.selectors);
+
+      let ready = await waitForAssignableRows(lytx, config.apps.dispatch.selectors);
+      if (!ready) {
+        console.log("Table empty after clear — reloading Assign Drivers once…");
+        await lytx.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
+        await ensureLytxAssignPage(lytx, config.apps.dispatch);
+        await clearLytxVehicleFilter(lytx, config.apps.dispatch.selectors);
+        ready = await waitForAssignableRows(lytx, config.apps.dispatch.selectors);
+      }
+
+      if (!ready) {
         console.log("No more vehicles left in Assign Drivers. Done.");
         writeTaskStatus("allocate-drivers", {
           state: "done",
@@ -170,7 +185,22 @@ async function hasAssignableRows(page, selectors) {
   const vehicleColumn =
     selectors.vehicleColumn || ".cdk-row.lytx-table-row .cdk-column-Vehicle";
   const count = await page.locator(vehicleColumn).count();
-  return count > 0;
+  if (count > 0) return true;
+  // Fallback: any data row with an Assign control (covers blank Vehicle cells).
+  const rows = page.locator(".cdk-row.lytx-table-row");
+  const rowCount = await rows.count();
+  if (rowCount > 0) return true;
+  const assignBtn = page.getByRole("button", { name: "Assign", exact: true });
+  return (await assignBtn.count()) > 0;
+}
+
+/** Poll briefly — Lytx table often lags after filter clear / assign. */
+async function waitForAssignableRows(page, selectors, { attempts = 8, delayMs = 700 } = {}) {
+  for (let i = 0; i < attempts; i += 1) {
+    if (await hasAssignableRows(page, selectors)) return true;
+    await sleep(delayMs);
+  }
+  return false;
 }
 
 async function allocateOne(lytx, webfleet, config) {

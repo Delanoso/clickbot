@@ -388,30 +388,67 @@ async function pickFirstDropdownOption(page, inputSel, textToType) {
 
 /**
  * Clear vehicle filter so the next truck can be processed.
+ * Lytx keeps a selected vehicle chip after Assign — clearing the text box alone
+ * is not enough, and a leftover filter makes the table look empty.
  */
-export async function clearLytxVehicleFilter(page, selectors) {
+export async function clearLytxVehicleFilter(page, selectors = {}) {
   if (selectors.clearVehicleSearch) {
     await clickIfPresentFrom(page, selectors.clearVehicleSearch, { timeout: 3000 });
-    return;
+  }
+
+  // Remove selected filter chips / typeahead clear icons.
+  const removeButtons = page.locator(
+    [
+      ".mat-mdc-chip-remove",
+      ".mat-chip-remove",
+      "mat-chip button[aria-label*='remove' i]",
+      "mat-chip .mdc-evolution-chip__icon--trailing",
+      "[data-test-id*='clear' i]",
+      "button[aria-label*='Clear' i]",
+      "button[aria-label*='Remove' i]",
+      ".typeahead .clear, .search-clear, .clear-icon",
+      ".cdk-overlay-pane button.close",
+    ].join(", ")
+  );
+  for (let i = 0; i < 8; i += 1) {
+    const btn = removeButtons.first();
+    if (!(await btn.isVisible().catch(() => false))) break;
+    await btn.click({ force: true }).catch(() => {});
+    await sleep(250);
   }
 
   // Reset filters button when present.
   const reset = page.getByRole("button", { name: /^Reset$/i }).first();
   if (await reset.isVisible().catch(() => false)) {
-    await reset.click();
+    await reset.click().catch(() => {});
     await sleep(1000);
-    return;
   }
 
-  if (selectors.vehicleSearchInput) {
-    const input = locate(page, selectors.vehicleSearchInput);
+  const input = page
+    .locator(
+      '[data-test-id="typeahead-search-input"], input[placeholder="Search Vehicle Name"]'
+    )
+    .first();
+  if (await input.isVisible().catch(() => false)) {
     try {
+      await input.click({ force: true });
       await input.fill("");
-      await input.press("Enter");
+      await input.press("Escape").catch(() => {});
+      await input.press("Enter").catch(() => {});
+    } catch {
+      // ignore
+    }
+  } else if (selectors.vehicleSearchInput) {
+    try {
+      const configured = locate(page, selectors.vehicleSearchInput);
+      await configured.fill("");
+      await configured.press("Enter");
     } catch {
       // ignore
     }
   }
+
+  await sleep(1200);
 }
 
 function sleep(ms) {
