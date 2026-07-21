@@ -24,29 +24,40 @@ addTruckForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const truck = truckInput.value.trim();
   if (!truck) return;
-  truckFormNote.textContent = "Saving…";
+
+  const submitBtn = addTruckForm.querySelector('button[type="submit"]');
+  if (submitBtn) submitBtn.disabled = true;
+  truckInput.disabled = true;
+  truckFormNote.textContent = "Saving truck…";
+
   try {
     const res = await fetch("/api/depot/trucks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ truck }),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Could not add truck");
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `Could not add truck (${res.status})`);
     truckInput.value = "";
-    truckFormNote.textContent = data.added
-      ? `Added ${data.truck}${data.driver ? ` · ${data.driver}` : " · no driver found"}${
-          data.restarted ? " · monitor restarting" : ""
-        }`
-      : data.updated
-        ? `Updated ${data.truck}${data.driver ? ` · ${data.driver}` : ""}`
+    if (data.added) {
+      truckFormNote.textContent = data.lookupPending
+        ? `Added ${data.truck}. Looking up driver on Webfleet…`
+        : `Added ${data.truck}${data.driver ? ` · ${data.driver}` : ""}`;
+    } else if (data.updated) {
+      truckFormNote.textContent = `Updated ${data.truck}${data.driver ? ` · ${data.driver}` : ""}`;
+    } else {
+      truckFormNote.textContent = data.lookupPending
+        ? `${data.truck} is already on the list. Refreshing driver from Webfleet…`
         : `${data.truck} is already on the list`;
-    if (data.lookupError) {
-      truckFormNote.textContent += ` (lookup warning: ${data.lookupError})`;
     }
+    if (data.restarted) truckFormNote.textContent += " · monitor restarting";
     await refresh();
   } catch (error) {
-    truckFormNote.textContent = error.message;
+    truckFormNote.textContent = error.message || String(error);
+  } finally {
+    truckInput.disabled = false;
+    if (submitBtn) submitBtn.disabled = false;
+    truckInput.focus();
   }
 });
 

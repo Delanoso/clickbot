@@ -104,6 +104,42 @@ function restartDepotIfRunning() {
   return { restarted: true, task: getTask("depot-monitor") };
 }
 
+const driverLookupQueue = [];
+let driverLookupRunning = false;
+
+function queueDriverLookup(truckNumber) {
+  const truck = String(truckNumber || "").trim().toUpperCase();
+  if (!truck) return;
+  if (!driverLookupQueue.includes(truck)) driverLookupQueue.push(truck);
+  void processDriverLookupQueue();
+}
+
+async function processDriverLookupQueue() {
+  if (driverLookupRunning) return;
+  driverLookupRunning = true;
+  try {
+    while (driverLookupQueue.length) {
+      const truck = driverLookupQueue.shift();
+      try {
+        console.log(`[depot] Looking up driver for ${truck}...`);
+        const driver = await fetchVehicleDriverName(truck, CONFIG_PATH);
+        if (driver) {
+          addDepotTruck(truck, { driver, configPath: CONFIG_PATH });
+          console.log(`[depot] ${truck} -> ${driver}`);
+        } else {
+          console.log(`[depot] ${truck} -> (no driver)`);
+        }
+      } catch (error) {
+        console.log(
+          `[depot] Driver lookup failed for ${truck}: ${error.message || error}`
+        );
+      }
+    }
+  } finally {
+    driverLookupRunning = false;
+  }
+}
+
 async function handleApi(req, res, url) {
   if (req.method === "GET" && url.pathname === "/api/health") {
     return sendJson(res, 200, {
@@ -139,18 +175,28 @@ async function handleApi(req, res, url) {
     if (req.method === "POST") {
       const body = await readBody(req);
       const truck = body.truck || body.truckNumber;
-      let driver = String(body.driver || "").trim();
-      let lookupError = null;
-      if (!driver && !body.skipLookup) {
-        try {
-          driver = await fetchVehicleDriverName(truck, CONFIG_PATH);
-        } catch (error) {
-          lookupError = error.message || String(error);
-        }
+      const providedDriver = String(body.driver || "").trim();
+
+      // Save immediately so the UI does not hang on slow Webfleet lookup (~60-90s).
+      const result = addDepotTruck(truck, {
+        driver: providedDriver,
+        configPath: CONFIG_PATH,
+      });
+      const restart =
+        body.restart === false ? { restarted: false } : restartDepotIfRunning();
+
+      const shouldLookup =
+        !providedDriver && !body.skipLookup && (result.added || !result.driver);
+      if (shouldLookup) {
+        queueDriverLookup(result.truck || truck);
       }
-      const result = addDepotTruck(truck, { driver, configPath: CONFIG_PATH });
-      const restart = body.restart === false ? { restarted: false } : restartDepotIfRunning();
-      return sendJson(res, 200, { ...result, lookupError, ...restart });
+
+      return sendJson(res, 200, {
+        ...result,
+        lookupPending: shouldLookup,
+        lookupError: null,
+        ...restart,
+      });
     }
 
     if (req.method === "PUT") {
