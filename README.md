@@ -119,8 +119,8 @@ Example `config/local.json`:
 {
   "depotMonitor": {
     "pollIntervalMs": 60000,
-    "targetArea": "depot",
-    "targetAreas": ["main depot"],
+    "targetArea": "HFR - Boksburg Depot",
+    "targetAreas": ["HFR - Boksburg Depot", "Boksburg Depot"],
     "trucks": ["H2512", "NH2482"],
     "workUrl": "https://live-wf.webfleet.com/web/map",
     "selectors": {
