@@ -14,19 +14,21 @@
     "targetAreas": [
       "HFR - Boksburg Depot",
       "HFR - BOKSBURG DEPOT",
-      "Boksburg Depot"
+      "Boksburg Depot",
+      "North Boundary Road, Salfin, Boksburg",
+      "N Boundary Road, Boksburg"
     ],
     "trucks": [
-      "H2512",
-      "NH2482"
+      "R2609MH",
+      "R2071TL",
+      "R2069MH",
+      "R2051"
     ],
     "workUrl": "https://live-wf.webfleet.com/web/map",
     "searchDelayMs": 1500,
     "resultDelayMs": 1000,
     "selectors": {
-      "searchInput": {
-        "placeholder": "Search"
-      },
+      "searchInput": "input.t3sel-object-filter-bar-item-search",
       "resultItem": null,
       "locationText": null,
       "detailText": null,

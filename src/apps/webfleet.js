@@ -90,17 +90,20 @@ export async function lookupTruckAreaInWebfleet(page, appConfig, truckNumber, mo
     return { found: false, locationText: "", rawText: "", source: "empty_query" };
   }
 
+  await search.click({ force: true }).catch(() => {});
   await search.fill("", { force: true });
   await search.fill(query, { force: true });
   await search.press("Enter").catch(() => {});
   await sleep(monitorConfig.searchDelayMs ?? 1500);
 
   await clickMonitorResultIfPresent(page, selectors);
+  await clickTruckResultByText(page, query);
   await sleep(monitorConfig.resultDelayMs ?? 1000);
 
   const locationText =
     (await readFirstVisibleText(page, selectors.locationText, { timeout: 2500 })) ||
     (await readLocationFromTable(page, query, selectors)) ||
+    (await readLocationFromDetailPanel(page, query)) ||
     "";
 
   const detailText = await readFirstVisibleText(page, selectors.detailText, {
@@ -304,12 +307,37 @@ async function resolveDriversSearchInput(page, selectors) {
 }
 
 async function resolveMonitorSearchInput(page, appConfig, monitorConfig) {
+  const preferredCss = "input.t3sel-object-filter-bar-item-search";
+  const preferred = page.locator(preferredCss).first();
+  if (await preferred.isVisible().catch(() => false)) {
+    return preferred;
+  }
+
   const selector =
     monitorConfig.selectors?.searchInput ||
     appConfig.monitor?.selectors?.searchInput ||
     appConfig.selectors?.searchInput;
 
   if (selector) {
+    // Prefer a visible match when CSS can hit multiple Search inputs on the map.
+    if (typeof selector === "string" || selector.css || selector.placeholder) {
+      const candidates =
+        typeof selector === "string"
+          ? page.locator(selector)
+          : selector.css
+            ? page.locator(selector.css)
+            : page.getByPlaceholder(selector.placeholder, {
+                exact: Boolean(selector.exact),
+              });
+      const count = await candidates.count();
+      for (let i = 0; i < count; i += 1) {
+        const candidate = candidates.nth(i);
+        if (await candidate.isVisible().catch(() => false)) {
+          return candidate;
+        }
+      }
+    }
+
     const locator = locate(page, selector);
     try {
       await locator.waitFor({ state: "visible", timeout: 5000 });
@@ -320,6 +348,46 @@ async function resolveMonitorSearchInput(page, appConfig, monitorConfig) {
   }
 
   return resolveDriversSearchInput(page, appConfig.selectors || {});
+}
+
+async function clickTruckResultByText(page, truckNumber) {
+  const needle = String(truckNumber || "").trim().toUpperCase();
+  if (!needle) return false;
+
+  try {
+    const row = page
+      .locator(
+        "button.t3sel-vehicle-compact-list-row, li.t3sel-list-row, .t3sel-vehicle-compact-list-row"
+      )
+      .filter({ hasText: new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") })
+      .first();
+    if (await row.isVisible().catch(() => false)) {
+      await row.click({ force: true });
+      return true;
+    }
+  } catch {
+    // fall through
+  }
+
+  try {
+    return await page.evaluate((query) => {
+      const nodes = [
+        ...document.querySelectorAll(
+          "button.t3sel-vehicle-compact-list-row, li.t3sel-list-row, a, button, [role='option'], [role='row']"
+        ),
+      ];
+      for (const node of nodes) {
+        const text = (node.innerText || "").replace(/\s+/g, " ").trim();
+        if (!text || text.length > 220) continue;
+        if (!text.toUpperCase().includes(query)) continue;
+        node.click();
+        return true;
+      }
+      return false;
+    }, needle);
+  } catch {
+    return false;
+  }
 }
 
 async function clickMonitorResultIfPresent(page, selectors) {
@@ -356,6 +424,59 @@ async function readFirstVisibleText(page, selector, { timeout = 2500, allowMany 
   }
 
   return "";
+}
+
+async function readLocationFromDetailPanel(page, truckNumber) {
+  try {
+    return await page.evaluate((truckId) => {
+      const normalize = (s) => String(s || "").replace(/\s+/g, " ").trim();
+      const needle = normalize(truckId).toUpperCase();
+
+      // Preferred: Webfleet map vehicle compact-list row caption.
+      const rows = [
+        ...document.querySelectorAll(
+          "button.t3sel-vehicle-compact-list-row, li.t3sel-list-row, figcaption.t3sel-vehicle-compact-list-caption"
+        ),
+      ];
+      for (const row of rows) {
+        const text = normalize(row.innerText);
+        if (!text.toUpperCase().includes(needle)) continue;
+        // Strip leading "R2609MH– Driver Name" and keep location/time portion when present.
+        const afterComma = text.includes(",")
+          ? text.slice(text.indexOf(",") + 1).trim()
+          : "";
+        if (afterComma) return afterComma;
+        return text;
+      }
+
+      const body = normalize(document.body.innerText);
+      const labels = ["Location", "Area", "Address", "Position", "Geofence"];
+      for (const label of labels) {
+        const re = new RegExp(`${label}\\s*[:\\n]?\\s*([^\\n]{3,180})`, "i");
+        const match = body.match(re);
+        if (match?.[1]) {
+          const value = normalize(match[1]);
+          if (value && !/^details$/i.test(value)) return value;
+        }
+      }
+
+      const lines = body
+        .split(/\n+/)
+        .map(normalize)
+        .filter(Boolean);
+      const truckLine = lines.find((line) => line.toUpperCase().includes(needle));
+      if (truckLine) {
+        const afterComma = truckLine.includes(",")
+          ? truckLine.slice(truckLine.indexOf(",") + 1).trim()
+          : "";
+        return afterComma || truckLine;
+      }
+
+      return "";
+    }, truckNumber);
+  } catch {
+    return "";
+  }
 }
 
 async function readLocationFromTable(page, truckNumber, selectors) {

@@ -9,7 +9,7 @@ export function toAreaTerms(config = {}) {
   const values = [];
   if (config.targetArea) values.push(config.targetArea);
   if (Array.isArray(config.targetAreas)) values.push(...config.targetAreas);
-  return values.map(normalizeMonitorText).filter(Boolean);
+  return [...new Set(values.map(normalizeMonitorText).filter(Boolean))];
 }
 
 export function isInTargetArea(locationText, config = {}) {
