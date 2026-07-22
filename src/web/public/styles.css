@@ -518,6 +518,38 @@ main {
   outline: 1px solid var(--accent);
 }
 
+.watch-search {
+  margin: 0 0 1rem;
+}
+
+.watch-search label {
+  display: block;
+  margin-bottom: 0.45rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.watch-search-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.65rem;
+}
+
+.watch-search-row input {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: rgba(5, 9, 14, 0.75);
+  color: var(--text);
+  font: inherit;
+  padding: 0.8rem 0.9rem;
+}
+
+.watch-search-row input:focus {
+  outline: 1px solid var(--accent);
+}
+
 .form-note,
 .muted-strong {
   color: var(--muted);

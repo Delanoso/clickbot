@@ -89,6 +89,21 @@
           <p id="truckFormNote" class="form-note"></p>
         </form>
 
+        <div class="watch-search">
+          <label for="watchSearchInput">Search watch list</label>
+          <div class="watch-search-row">
+            <input
+              id="watchSearchInput"
+              type="search"
+              placeholder="Truck number or driver name…"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <button type="button" class="btn" id="watchSearchClear" hidden>Clear</button>
+          </div>
+          <p id="watchSearchNote" class="form-note"></p>
+        </div>
+
         <div id="watchList" class="watch-list"></div>
       </section>
 
@@ -103,6 +118,6 @@
       </section>
     </main>
 
-    <script type="module" src="/depot.js?v=20260721b"></script>
+    <script type="module" src="/depot.js?v=20260722a"></script>
   </body>
 </html>

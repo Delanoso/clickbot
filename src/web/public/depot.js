@@ -13,6 +13,9 @@ const truckCount = document.getElementById("truckCount");
 const truckFormNote = document.getElementById("truckFormNote");
 const addTruckForm = document.getElementById("addTruckForm");
 const truckInput = document.getElementById("truckInput");
+const watchSearchInput = document.getElementById("watchSearchInput");
+const watchSearchClear = document.getElementById("watchSearchClear");
+const watchSearchNote = document.getElementById("watchSearchNote");
 const logView = document.getElementById("logView");
 const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
@@ -20,6 +23,9 @@ const stopBtn = document.getElementById("stopBtn");
 /** Bumped to ignore stale poll responses after add/remove. */
 let refreshGeneration = 0;
 const removingTrucks = new Set();
+let latestConfiguredTrucks = [];
+let latestLiveRows = [];
+let latestDepot = null;
 
 startBtn.addEventListener("click", () => controlTask("start"));
 stopBtn.addEventListener("click", () => controlTask("stop"));
@@ -30,6 +36,16 @@ watchList.addEventListener("click", (event) => {
   if (!btn || !watchList.contains(btn)) return;
   event.preventDefault();
   void removeTruck(btn.getAttribute("data-remove"));
+});
+
+watchSearchInput.addEventListener("input", () => {
+  renderFromCache();
+});
+
+watchSearchClear.addEventListener("click", () => {
+  watchSearchInput.value = "";
+  watchSearchInput.focus();
+  renderFromCache();
 });
 
 addTruckForm.addEventListener("submit", async (event) => {
@@ -138,7 +154,39 @@ function renderTask(task) {
   depotMessage.textContent = task?.status?.message || (task?.running ? "Running" : "Idle");
 }
 
+function normalizeSearch(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function getSearchQuery() {
+  return normalizeSearch(watchSearchInput?.value);
+}
+
+function entryMatchesSearch(entry, query) {
+  if (!query) return true;
+  const truck = String(typeof entry === "string" ? entry : entry.id || "").toLowerCase();
+  const driver = String(typeof entry === "string" ? "" : entry.driver || "").toLowerCase();
+  return truck.includes(query) || driver.includes(query);
+}
+
+function liveRowMatchesSearch(row, driverMap, query) {
+  if (!query) return true;
+  const truck = String(row.truckNumber || "").toLowerCase();
+  const driver = String(driverMap.get(String(row.truckNumber).toUpperCase()) || "").toLowerCase();
+  const location = String(row.locationText || "").toLowerCase();
+  return truck.includes(query) || driver.includes(query) || location.includes(query);
+}
+
+function renderFromCache() {
+  renderLive(latestDepot, latestConfiguredTrucks);
+  renderWatchList(latestConfiguredTrucks, latestLiveRows);
+}
+
 function renderLive(depot, configuredTrucks) {
+  const query = getSearchQuery();
   const driverMap = new Map(
     (configuredTrucks || []).map((entry) => [
       String(typeof entry === "string" ? entry : entry.id).toUpperCase(),
@@ -155,15 +203,23 @@ function renderLive(depot, configuredTrucks) {
     return;
   }
 
-  const inDepot = depot.inDepot || [];
-  const trucks = depot.trucks || [];
-  inDepotCount.textContent = String(depot.inDepotCount ?? inDepot.length);
+  const inDepot = (depot.inDepot || []).filter((row) =>
+    liveRowMatchesSearch(row, driverMap, query)
+  );
+  const trucks = (depot.trucks || []).filter((row) =>
+    liveRowMatchesSearch(row, driverMap, query)
+  );
+  inDepotCount.textContent = String(inDepot.length);
   depotSummary.textContent =
     depot.message || `Cycle ${depot.cycle || 0} · updated ${formatTime(depot.updatedAt)}`;
-  watchedMeta.textContent = `${trucks.length || configuredTrucks.length} trucks watched`;
+  watchedMeta.textContent = query
+    ? `Showing ${trucks.length} of ${depot.trucks?.length || configuredTrucks.length} locations`
+    : `${depot.trucks?.length || configuredTrucks.length} trucks watched`;
 
   if (!inDepot.length) {
-    inDepotList.innerHTML = `<p class="empty-note">No watched trucks currently match the depot.</p>`;
+    inDepotList.innerHTML = `<p class="empty-note">${
+      query ? "No in-depot trucks match this search." : "No watched trucks currently match the depot."
+    }</p>`;
   } else {
     inDepotList.innerHTML = inDepot
       .map((row) => {
@@ -193,7 +249,20 @@ function renderLive(depot, configuredTrucks) {
 }
 
 function renderWatchList(trucks, liveRows = []) {
-  truckCount.textContent = `${trucks.length} truck${trucks.length === 1 ? "" : "s"}`;
+  const query = getSearchQuery();
+  const hasQuery = Boolean(query);
+  watchSearchClear.hidden = !hasQuery;
+
+  const filtered = (trucks || []).filter((entry) => entryMatchesSearch(entry, query));
+  truckCount.textContent = hasQuery
+    ? `${filtered.length} of ${trucks.length} truck${trucks.length === 1 ? "" : "s"}`
+    : `${trucks.length} truck${trucks.length === 1 ? "" : "s"}`;
+  watchSearchNote.textContent = hasQuery
+    ? filtered.length
+      ? `Filtered by “${watchSearchInput.value.trim()}”`
+      : `No trucks match “${watchSearchInput.value.trim()}”`
+    : "";
+
   const liveMap = new Map(
     (liveRows || []).map((row) => [String(row.truckNumber).toUpperCase(), row])
   );
@@ -203,7 +272,12 @@ function renderWatchList(trucks, liveRows = []) {
     return;
   }
 
-  watchList.innerHTML = trucks
+  if (!filtered.length) {
+    watchList.innerHTML = `<p class="empty-note">No trucks match this search.</p>`;
+    return;
+  }
+
+  watchList.innerHTML = filtered
     .map((entry) => {
       const truck = typeof entry === "string" ? entry : entry.id;
       const driver = typeof entry === "string" ? "" : entry.driver || "";
@@ -260,9 +334,12 @@ async function refresh({ force = false } = {}) {
   hostLine.textContent = `http://${ip}${location.port ? `:${location.port}` : ""}/depot`;
   clockLine.textContent = new Date().toLocaleString();
 
+  latestConfiguredTrucks = depotPayload.trucks || [];
+  latestDepot = depotPayload.depot || null;
+  latestLiveRows = depotPayload.depot?.trucks || [];
+
   renderTask(depotPayload.task);
-  renderLive(depotPayload.depot, depotPayload.trucks || []);
-  renderWatchList(depotPayload.trucks || [], depotPayload.depot?.trucks || []);
+  renderFromCache();
   await refreshLogs();
 }
 
