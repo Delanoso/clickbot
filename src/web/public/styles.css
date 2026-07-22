@@ -421,6 +421,7 @@ main {
 
   .control-bar,
   .add-truck-row,
+  .watch-search-row,
   .watch-row {
     grid-template-columns: 1fr;
     flex-direction: column;
