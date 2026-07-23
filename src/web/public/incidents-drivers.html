@@ -23,7 +23,7 @@
       <p class="eyebrow">Lytx ops</p>
       <h1 class="brand brand-sm">Incidents and Drivers</h1>
       <p class="lede">
-        Working copy of the depot watch page — we’ll customize this for incidents and drivers.
+        Track allocated drivers with comments. Green = in the Boksburg depot. Yellow = loaded trucks in Johannesburg (all CoJ suburbs &amp; postal codes).
       </p>
       <div class="hero-meta">
         <span id="hostLine">Starting…</span>
@@ -34,30 +34,50 @@
     <main class="depot-main">
       <section class="control-bar">
         <div class="control-status">
-          <span class="status-dot" id="depotDot"></span>
+          <span class="status-dot" id="incidentsDot"></span>
           <div>
-            <strong id="depotState">idle</strong>
-            <p id="depotMessage">Monitor idle</p>
+            <strong id="incidentsState">idle</strong>
+            <p id="incidentsMessage">Monitor idle</p>
           </div>
         </div>
         <div class="task-actions">
+          <a class="btn" id="exportBtn" href="/api/incidents/export">Export Excel</a>
           <button type="button" class="btn primary" id="startBtn">Start monitor</button>
           <button type="button" class="btn" id="stopBtn">Stop</button>
         </div>
       </section>
 
-      <section class="depot-board" aria-label="Depot live board">
-        <div class="section-head">
-          <div>
-            <h2>Live board</h2>
-            <p id="depotSummary">Waiting for monitor data…</p>
+      <section class="zone-boards" aria-label="Location boards">
+        <div class="zone-board zone-depot" aria-label="In depot">
+          <div class="section-head">
+            <div>
+              <h2>In depot</h2>
+              <p id="depotSummary">Waiting for monitor data…</p>
+            </div>
+            <div class="count-block">
+              <span class="count-label">Depot</span>
+              <strong id="inDepotCount">0</strong>
+            </div>
           </div>
-          <div class="count-block">
-            <span class="count-label">In depot</span>
-            <strong id="inDepotCount">0</strong>
-          </div>
+          <div id="inDepotList" class="truck-list"></div>
         </div>
-        <div id="inDepotList" class="truck-list"></div>
+
+        <div class="zone-board zone-jhb" aria-label="In Johannesburg">
+          <div class="section-head">
+            <div>
+              <h2>In Johannesburg</h2>
+              <p id="jhbSummary">Loaded trucks matched to CoJ suburbs / postal codes.</p>
+            </div>
+            <div class="count-block count-jhb">
+              <span class="count-label">JHB</span>
+              <strong id="inJhbCount">0</strong>
+            </div>
+          </div>
+          <div id="inJhbList" class="truck-list"></div>
+        </div>
+      </section>
+
+      <section class="depot-board" aria-label="All watched locations">
         <div class="section-subhead">
           <h3>Current locations</h3>
           <p id="watchedMeta"></p>
@@ -69,7 +89,9 @@
         <div class="section-head">
           <div>
             <h2>Watch list</h2>
-            <p>Add a truck to look up its Webfleet <strong>Driver</strong> name automatically. Changes save immediately and restart the monitor if it’s running.</p>
+            <p>
+              Add a truck to look up its Webfleet <strong>Driver</strong> name. Add a comment next to each driver. Changes save immediately and restart the monitor if it’s running.
+            </p>
           </div>
           <p id="truckCount" class="muted-strong">0 trucks</p>
         </div>
@@ -96,7 +118,7 @@
             <input
               id="watchSearchInput"
               type="search"
-              placeholder="Truck number or driver name…"
+              placeholder="Truck, driver, or comment…"
               autocomplete="off"
               spellcheck="false"
             />
@@ -108,17 +130,17 @@
         <div id="watchList" class="watch-list"></div>
       </section>
 
-      <section class="log-board" aria-label="Depot log">
+      <section class="log-board" aria-label="Incidents log">
         <div class="section-head">
           <div>
             <h2>Activity</h2>
-            <p>Latest depot monitor lines.</p>
+            <p id="coverageNote">Latest incidents monitor lines.</p>
           </div>
         </div>
         <pre id="logView" class="log-view">No log lines yet.</pre>
       </section>
     </main>
 
-    <script type="module" src="/incidents-drivers.js?v=20260723a"></script>
+    <script type="module" src="/incidents-drivers.js?v=20260723b"></script>
   </body>
 </html>

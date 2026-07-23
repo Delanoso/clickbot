@@ -34,6 +34,10 @@
       "locationColumnIndex": null
     }
   },
+  "incidentsDrivers": {
+    "pollIntervalMs": 60000,
+    "trucks": []
+  },
   "apps": {
     "dispatch": {
       "url": "https://login.lytx.com",

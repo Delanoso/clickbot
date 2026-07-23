@@ -12,15 +12,26 @@ import {
   setDepotTruckDriver,
   setDepotTrucks,
 } from "./depotConfig.js";
+import {
+  addIncidentsTruck,
+  listIncidentsTrucks,
+  readIncidentsConfig,
+  removeIncidentsTruck,
+  setIncidentsTruckComment,
+  setIncidentsTruckDriver,
+  setIncidentsTrucks,
+} from "./incidentsConfig.js";
 import { fetchVehicleDriverName } from "./fetchVehicleDriver.js";
 import {
   getDepotSnapshot,
+  getIncidentsSnapshot,
   getTask,
   listTasks,
   readTaskLog,
   startTask,
   stopTask,
 } from "./taskManager.js";
+import { getJohannesburgCoverageSummary } from "../utils/locationClassifier.js";
 
 loadEnvFile();
 
@@ -113,10 +124,27 @@ function restartDepotIfRunning() {
   return { restarted: true, task: getTask("depot-monitor") };
 }
 
+function restartIncidentsIfRunning() {
+  const task = getTask("incidents-monitor");
+  if (!task?.running) {
+    return { restarted: false, task };
+  }
+  stopTask("incidents-monitor");
+  setTimeout(() => {
+    startTask("incidents-monitor", { configPath: CONFIG_PATH });
+  }, 1200);
+  return { restarted: true, task: getTask("incidents-monitor") };
+}
+
 const driverLookupQueue = [];
 /** Trucks cancelled while a lookup was queued or in flight (e.g. user removed them). */
 const cancelledDriverLookups = new Set();
 let driverLookupRunning = false;
+
+/** Separate queue so incidents driver lookups don't fight depot lookups. */
+const incidentsDriverLookupQueue = [];
+const cancelledIncidentsDriverLookups = new Set();
+let incidentsDriverLookupRunning = false;
 
 function queueDriverLookup(truckNumber) {
   const truck = String(truckNumber || "").trim().toUpperCase();
@@ -132,6 +160,24 @@ function cancelDriverLookup(truckNumber) {
   cancelledDriverLookups.add(truck);
   const idx = driverLookupQueue.indexOf(truck);
   if (idx >= 0) driverLookupQueue.splice(idx, 1);
+}
+
+function queueIncidentsDriverLookup(truckNumber) {
+  const truck = String(truckNumber || "").trim().toUpperCase();
+  if (!truck) return;
+  cancelledIncidentsDriverLookups.delete(truck);
+  if (!incidentsDriverLookupQueue.includes(truck)) {
+    incidentsDriverLookupQueue.push(truck);
+  }
+  void processIncidentsDriverLookupQueue();
+}
+
+function cancelIncidentsDriverLookup(truckNumber) {
+  const truck = String(truckNumber || "").trim().toUpperCase();
+  if (!truck) return;
+  cancelledIncidentsDriverLookups.add(truck);
+  const idx = incidentsDriverLookupQueue.indexOf(truck);
+  if (idx >= 0) incidentsDriverLookupQueue.splice(idx, 1);
 }
 
 async function processDriverLookupQueue() {
@@ -173,6 +219,99 @@ async function processDriverLookupQueue() {
     driverLookupRunning = false;
     if (driverLookupQueue.length) void processDriverLookupQueue();
   }
+}
+
+async function processIncidentsDriverLookupQueue() {
+  if (incidentsDriverLookupRunning) return;
+  incidentsDriverLookupRunning = true;
+  try {
+    while (incidentsDriverLookupQueue.length) {
+      const truck = incidentsDriverLookupQueue.shift();
+      if (cancelledIncidentsDriverLookups.has(truck)) {
+        cancelledIncidentsDriverLookups.delete(truck);
+        continue;
+      }
+      try {
+        console.log(`[incidents] Looking up driver for ${truck}...`);
+        const driver = await fetchVehicleDriverName(truck, CONFIG_PATH);
+        if (cancelledIncidentsDriverLookups.has(truck)) {
+          cancelledIncidentsDriverLookups.delete(truck);
+          console.log(`[incidents] ${truck} lookup discarded (truck removed)`);
+          continue;
+        }
+        if (driver) {
+          const result = setIncidentsTruckDriver(truck, driver, CONFIG_PATH);
+          if (result.missing) {
+            console.log(`[incidents] ${truck} -> ${driver} (skipped, not on list)`);
+          } else {
+            console.log(`[incidents] ${truck} -> ${driver}`);
+          }
+        } else {
+          console.log(`[incidents] ${truck} -> (no driver)`);
+        }
+      } catch (error) {
+        console.log(
+          `[incidents] Driver lookup failed for ${truck}: ${error.message || error}`
+        );
+      }
+    }
+  } finally {
+    incidentsDriverLookupRunning = false;
+    if (incidentsDriverLookupQueue.length) void processIncidentsDriverLookupQueue();
+  }
+}
+
+function csvEscape(value) {
+  const text = String(value ?? "");
+  if (/[",\r\n]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
+}
+
+function buildIncidentsExportCsv() {
+  const config = readIncidentsConfig(CONFIG_PATH);
+  const snapshot = getIncidentsSnapshot() || {};
+  const liveById = new Map(
+    (snapshot.trucks || []).map((row) => [
+      String(row.truckNumber || "").toUpperCase(),
+      row,
+    ])
+  );
+
+  const header = [
+    "Truck",
+    "Driver",
+    "Comment",
+    "Zone",
+    "In Depot",
+    "In Johannesburg",
+    "Location",
+    "Last Checked",
+  ];
+  const lines = [header.join(",")];
+
+  for (const truck of config.trucks) {
+    const live = liveById.get(truck.id) || {};
+    const zone = live.zone || (live.inDepot ? "depot" : live.inJohannesburg ? "johannesburg" : "other");
+    lines.push(
+      [
+        truck.id,
+        truck.driver || "",
+        truck.comment || "",
+        zone,
+        live.inDepot ? "YES" : "NO",
+        live.inJohannesburg ? "YES" : "NO",
+        live.locationText || "",
+        live.checkedAt || "",
+      ]
+        .map(csvEscape)
+        .join(",")
+    );
+  }
+
+  // Excel-friendly UTF-8 BOM
+  return `\uFEFF${lines.join("\r\n")}\r\n`;
 }
 
 async function handleApi(req, res, url) {
@@ -250,6 +389,105 @@ async function handleApi(req, res, url) {
     const result = removeDepotTruck(truck, CONFIG_PATH);
     const restart = body.restart === false ? { restarted: false } : restartDepotIfRunning();
     return sendJson(res, 200, { ...result, ...restart });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/incidents") {
+    const config = readIncidentsConfig(CONFIG_PATH);
+    return sendJson(res, 200, {
+      incidents: getIncidentsSnapshot(),
+      trucks: config.trucks,
+      pollIntervalMs: config.pollIntervalMs,
+      johannesburg: getJohannesburgCoverageSummary(),
+      task: getTask("incidents-monitor"),
+    });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/incidents/export") {
+    const csv = buildIncidentsExportCsv();
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    res.writeHead(200, {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="incidents-drivers-${stamp}.csv"`,
+      "Cache-Control": "no-store",
+    });
+    res.end(csv);
+    return;
+  }
+
+  if (url.pathname === "/api/incidents/trucks") {
+    if (req.method === "GET") {
+      return sendJson(res, 200, { trucks: listIncidentsTrucks(CONFIG_PATH) });
+    }
+
+    if (req.method === "POST") {
+      const body = await readBody(req);
+      const truck = body.truck || body.truckNumber;
+      const providedDriver = String(body.driver || "").trim();
+      const providedComment = String(body.comment || "").trim();
+
+      const result = addIncidentsTruck(truck, {
+        driver: providedDriver,
+        comment: providedComment,
+        configPath: CONFIG_PATH,
+      });
+      const restart =
+        body.restart === false ? { restarted: false } : restartIncidentsIfRunning();
+
+      const shouldLookup =
+        !providedDriver && !body.skipLookup && (result.added || !result.driver);
+      if (shouldLookup) {
+        queueIncidentsDriverLookup(result.truck || truck);
+      }
+
+      return sendJson(res, 200, {
+        ...result,
+        lookupPending: shouldLookup,
+        lookupError: null,
+        ...restart,
+      });
+    }
+
+    if (req.method === "PUT") {
+      const body = await readBody(req);
+      const result = setIncidentsTrucks(body.trucks || [], CONFIG_PATH);
+      const restart =
+        body.restart === false ? { restarted: false } : restartIncidentsIfRunning();
+      return sendJson(res, 200, { ...result, ...restart });
+    }
+  }
+
+  const incidentsTruckMatch = url.pathname.match(
+    /^\/api\/incidents\/trucks\/([^/]+)(?:\/(comment))?$/
+  );
+  if (incidentsTruckMatch) {
+    const truck = decodeURIComponent(incidentsTruckMatch[1]);
+    const sub = incidentsTruckMatch[2] || null;
+
+    if (req.method === "DELETE") {
+      const body = await readBody(req).catch(() => ({}));
+      cancelIncidentsDriverLookup(truck);
+      const result = removeIncidentsTruck(truck, CONFIG_PATH);
+      const restart =
+        body.restart === false ? { restarted: false } : restartIncidentsIfRunning();
+      return sendJson(res, 200, { ...result, ...restart });
+    }
+
+    if (req.method === "PATCH" || req.method === "PUT") {
+      const body = await readBody(req);
+      if (sub === "comment" || body.comment != null) {
+        const result = setIncidentsTruckComment(
+          truck,
+          body.comment ?? "",
+          CONFIG_PATH
+        );
+        return sendJson(res, 200, result);
+      }
+      if (body.driver != null) {
+        const result = setIncidentsTruckDriver(truck, body.driver, CONFIG_PATH);
+        return sendJson(res, 200, result);
+      }
+      return sendJson(res, 400, { error: "Provide comment or driver to update" });
+    }
   }
 
   const taskMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)(?:\/(start|stop|logs))?$/);

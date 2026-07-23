@@ -4,6 +4,7 @@ import { runAllocateDrivers } from "./tasks/allocateDrivers.js";
 import { runFyiNotify } from "./tasks/fyiNotify.js";
 import { runDueForCoaching } from "./tasks/dueForCoaching.js";
 import { runDepotMonitor } from "./tasks/depotMonitor.js";
+import { runIncidentsMonitor } from "./tasks/incidentsMonitor.js";
 
 loadEnvFile();
 
@@ -52,10 +53,13 @@ async function main() {
     case "depot-monitor":
       await runDepotMonitor(config);
       break;
+    case "incidents-monitor":
+      await runIncidentsMonitor(config);
+      break;
     default:
       console.error(`Unknown task: ${args.task}`);
       console.error(
-        "Available tasks: allocate-drivers, fyi-notify, due-for-coaching, depot-monitor"
+        "Available tasks: allocate-drivers, fyi-notify, due-for-coaching, depot-monitor, incidents-monitor"
       );
       process.exitCode = 1;
   }

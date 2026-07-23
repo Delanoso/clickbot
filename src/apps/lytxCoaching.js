@@ -236,8 +236,8 @@ async function readEventVideoCount(page) {
   });
   if (fromText && fromText > 0) return fromText;
 
-  const thumbs = await listEventThumbnailLocators(page);
-  return thumbs.length;
+  const tagged = await tagEventThumbnails(page);
+  return tagged;
 }
 
 async function tagEventThumbnails(page) {

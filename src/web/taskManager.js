@@ -31,6 +31,12 @@ export const TASKS = [
     summary: "Watch trucks and alert when they enter Boksburg depot.",
     cli: "depot-monitor",
   },
+  {
+    id: "incidents-monitor",
+    name: "Incidents and Drivers",
+    summary: "Watch trucks for depot (green) and Johannesburg (yellow) with driver comments.",
+    cli: "incidents-monitor",
+  },
 ];
 
 const processes = new Map();
@@ -154,4 +160,8 @@ export function readTaskLog(taskId, { tail = 120 } = {}) {
 
 export function getDepotSnapshot() {
   return readTaskStatus("depot-monitor");
+}
+
+export function getIncidentsSnapshot() {
+  return readTaskStatus("incidents-monitor");
 }

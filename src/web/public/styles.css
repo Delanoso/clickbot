@@ -358,6 +358,96 @@ main {
   color: var(--signal);
 }
 
+.truck-chip.jhb {
+  border-color: rgba(232, 196, 74, 0.55);
+}
+
+.truck-chip.jhb strong {
+  color: #f0d56a;
+}
+
+.zone-boards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  animation: rise 900ms ease both;
+}
+
+.zone-board {
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+  padding: 1rem 1.1rem 0.4rem;
+}
+
+.zone-depot {
+  box-shadow: inset 3px 0 0 rgba(95, 224, 164, 0.65);
+}
+
+.zone-jhb {
+  box-shadow: inset 3px 0 0 rgba(232, 196, 74, 0.75);
+}
+
+.count-jhb strong {
+  color: #f0d56a;
+}
+
+.watch-row.jhb {
+  border-color: rgba(232, 196, 74, 0.55);
+}
+
+.watch-row.jhb strong {
+  color: #f0d56a;
+}
+
+.watch-row-incidents {
+  align-items: start;
+}
+
+.watch-main {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.comment-label {
+  margin-top: 0.35rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.comment-input {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: rgba(5, 9, 14, 0.75);
+  color: var(--text);
+  font: inherit;
+  padding: 0.55rem 0.7rem;
+}
+
+.comment-input:focus {
+  outline: 1px solid var(--accent);
+}
+
+.task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.task-actions a.btn {
+  text-decoration: none;
+}
+
+@media (max-width: 960px) {
+  .zone-boards {
+    grid-template-columns: 1fr;
+  }
+}
+
 .empty-note {
   color: var(--muted);
   padding: 0.5rem 0 1rem;

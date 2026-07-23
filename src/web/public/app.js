@@ -74,7 +74,9 @@ function renderTasks(tasks) {
     panel.querySelector('[data-role="detail"]').textContent = detail;
   }
 
-  const homeTasks = tasks.filter((task) => task.id !== "depot-monitor");
+  const homeTasks = tasks.filter(
+    (task) => task.id !== "depot-monitor" && task.id !== "incidents-monitor"
+  );
   logTabs.innerHTML = "";
   for (const task of homeTasks) {
     const btn = document.createElement("button");
