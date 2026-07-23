@@ -124,6 +124,7 @@ export async function recoverCoachList(page, appConfig = {}) {
 
 /**
  * Coach one Due-for-Coaching card end-to-end.
+ * Complete Session only appears after every event video has been played.
  */
 export async function coachOneSession(page, selectors = {}) {
   await dismissOverlays(page);
@@ -134,16 +135,15 @@ export async function coachOneSession(page, selectors = {}) {
   await clickStable(openBtn);
   console.log(`[coaching] Opened session via "${label || "Coach Event"}"`);
 
+  // Do not wait for Complete Session here — it is hidden until all clips are played.
   await page
-    .getByText(/DRIVER COACHING SESSION|Event Videos|Complete Session/i)
+    .getByText(/DRIVER COACHING SESSION|Event Videos/i)
     .first()
     .waitFor({ state: "visible", timeout: 60000 });
   await sleep(1000);
 
-  const played = await playAllEventVideos(page, selectors);
-  console.log(`[coaching] Played ${played} event video(s)`);
-
-  await waitForBehaviorsCleared(page, { timeoutMs: 20000 }).catch(() => {});
+  const played = await playAllEventVideosUntilReady(page, selectors);
+  console.log(`[coaching] All event videos played (${played} play action(s))`);
 
   await completeCoachingSession(page);
   await ensureDueForCoachingPage(page, { coaching: { selectors } }).catch(() => {});
@@ -153,29 +153,97 @@ export async function coachOneSession(page, selectors = {}) {
   return { played, label };
 }
 
-async function playAllEventVideos(page, selectors = {}) {
+/**
+ * Play every event clip (≥1s each) and keep going until Lytx shows the session
+ * is ready to complete (0 behaviors left and/or Complete Session visible).
+ */
+async function playAllEventVideosUntilReady(page, selectors = {}) {
   const minPlayMs = Number(selectors.minPlayMs || 1100);
-  // Always bring the player into view first — Complete Session is further down.
-  await scrollToEventPlayer(page);
+  const maxPasses = Number(selectors.maxPlayPasses || 4);
+  let totalPlays = 0;
 
-  let eventCount = await readEventVideoCount(page);
-  console.log(`[coaching] Event video count: ${eventCount || 1}`);
-
-  // Single-event sessions often have no carousel — scroll to player and press play.
-  if (!eventCount || eventCount <= 1) {
-    await playCurrentVideo(page, { minPlayMs, forceScroll: true });
-    return 1;
-  }
-
-  let played = 0;
-  for (let i = 0; i < eventCount; i += 1) {
-    console.log(`[coaching] Playing event ${i + 1}/${eventCount}`);
-    await selectEventThumbnail(page, i, eventCount);
+  for (let pass = 1; pass <= maxPasses; pass += 1) {
     await scrollToEventPlayer(page);
-    await playCurrentVideo(page, { minPlayMs, forceScroll: true });
-    played += 1;
+    const eventCount = (await readEventVideoCount(page)) || 1;
+    console.log(`[coaching] Play pass ${pass}/${maxPasses} — ${eventCount} event(s)`);
+
+    if (eventCount <= 1) {
+      await playCurrentVideo(page, { minPlayMs, forceScroll: true });
+      totalPlays += 1;
+    } else {
+      for (let i = 0; i < eventCount; i += 1) {
+        console.log(`[coaching] Playing event ${i + 1}/${eventCount}`);
+        await selectEventThumbnail(page, i, eventCount);
+        await scrollToEventPlayer(page);
+        await playCurrentVideo(page, { minPlayMs, forceScroll: true });
+        totalPlays += 1;
+      }
+    }
+
+    const ready = await sessionReadyToComplete(page);
+    if (ready) {
+      console.log(`[coaching] Session ready to complete (${ready})`);
+      return totalPlays;
+    }
+
+    console.log(
+      "[coaching] Not ready yet (Complete Session still hidden) — replaying remaining clips"
+    );
   }
-  return played;
+
+  // One last readiness check before giving up.
+  const ready = await sessionReadyToComplete(page, { timeoutMs: 5000 });
+  if (ready) return totalPlays;
+
+  throw new Error(
+    "Played event videos but Complete Session did not appear — clips may not have registered as viewed"
+  );
+}
+
+async function sessionReadyToComplete(page, { timeoutMs = 8000 } = {}) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const zeroBehaviors = await page
+      .getByText(/0 Behaviors Left to Coach/i)
+      .first()
+      .isVisible()
+      .catch(() => false);
+
+    // Peek at the bottom without requiring the button yet.
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)).catch(() => {});
+    const completeVisible = await page
+      .locator("button, a, [role='button']")
+      .filter({ hasText: /Complete Session/i })
+      .first()
+      .isVisible()
+      .catch(() => false);
+
+    if (completeVisible) return "complete-session-visible";
+    if (zeroBehaviors) {
+      // Behaviors cleared but button may still be painting — keep scrolling briefly.
+      await sleep(500);
+      if (
+        await page
+          .locator("button, a, [role='button']")
+          .filter({ hasText: /Complete Session/i })
+          .first()
+          .isVisible()
+          .catch(() => false)
+      ) {
+        return "complete-session-visible";
+      }
+      return "zero-behaviors";
+    }
+
+    // Scroll back up to the player for another pass.
+    await scrollToEventPlayer(page);
+    await sleep(400);
+  }
+  return null;
+}
+
+async function playAllEventVideos(page, selectors = {}) {
+  return playAllEventVideosUntilReady(page, selectors);
 }
 
 async function scrollToEventPlayer(page) {
@@ -450,10 +518,12 @@ async function waitForBehaviorsCleared(page, { timeoutMs = 15000 } = {}) {
 }
 
 async function completeCoachingSession(page) {
-  // Button is at the bottom — scroll first so it can render / become visible.
-  for (let attempt = 0; attempt < 6; attempt += 1) {
+  // Only call this after sessionReadyToComplete — button appears once all clips played.
+  console.log("[coaching] Looking for Complete Session at bottom of page…");
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)).catch(() => {});
-    await sleep(400);
+    await sleep(500);
 
     const completeSession = page
       .locator("button, a, [role='button']")
@@ -463,29 +533,32 @@ async function completeCoachingSession(page) {
     if (await completeSession.isVisible().catch(() => false)) {
       await completeSession.scrollIntoViewIfNeeded().catch(() => {});
       await sleep(300);
-      const disabled = await completeSession.isDisabled().catch(() => false);
-      if (disabled) {
-        console.log("[coaching] Complete Session disabled — playing current video again");
+      if (await completeSession.isDisabled().catch(() => false)) {
+        console.log("[coaching] Complete Session still disabled — clips not fully registered");
         await scrollToEventPlayer(page);
         await playCurrentVideo(page, { minPlayMs: 1200, forceScroll: true });
-        await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)).catch(() => {});
-        await sleep(500);
+        continue;
       }
-      if (!(await completeSession.isDisabled().catch(() => false))) {
-        await clickStable(completeSession, { forceAfterMs: 3000 });
-        break;
-      }
+      await clickStable(completeSession, { forceAfterMs: 3000 });
+      console.log("[coaching] Clicked Complete Session");
+      break;
     }
 
-    if (attempt === 5) {
-      // Dump nearby text for debugging, then throw.
+    if (attempt === 7) {
       const snippet = await page.evaluate(() =>
         (document.body?.innerText || "").slice(-800)
       );
       throw new Error(
-        `Complete Session not available after plays. Page tail: ${snippet.replace(/\s+/g, " ").slice(0, 400)}`
+        `Complete Session not visible yet (videos may still be unplayed). Page tail: ${snippet
+          .replace(/\s+/g, " ")
+          .slice(0, 400)}`
       );
     }
+
+    // Button still missing — play current clip again, then re-check.
+    console.log("[coaching] Complete Session not visible — playing current clip again");
+    await scrollToEventPlayer(page);
+    await playCurrentVideo(page, { minPlayMs: 1200, forceScroll: true });
   }
 
   // Modal: Save and complete your coaching session? → Complete
@@ -506,6 +579,7 @@ async function completeCoachingSession(page) {
     await sleep(300);
     await clickStable(anyComplete, { forceAfterMs: 2000 });
   }
+  console.log("[coaching] Confirmed Complete in modal");
 
   // Saved modal → Close (not Download PDF)
   await page
@@ -524,6 +598,7 @@ async function completeCoachingSession(page) {
   await clickStable(closeBtn, { forceAfterMs: 2000 });
   await closeBtn.waitFor({ state: "hidden", timeout: 30000 }).catch(() => {});
   await dismissOverlays(page);
+  console.log("[coaching] Closed saved-session modal");
 }
 
 export async function dismissOverlays(page) {
