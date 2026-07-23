@@ -22,7 +22,7 @@
       <p class="eyebrow">Personal ops console</p>
       <h1 class="brand">clickbot</h1>
       <p class="lede">
-        Run allocate and FYI from here. Depot watch lives on its own page.
+        Run allocate, FYI, and coaching from here. Depot watch lives on its own page.
       </p>
       <div class="hero-meta">
         <span id="hostLine">Starting…</span>
@@ -64,6 +64,24 @@
           </div>
         </article>
 
+        <article class="task-panel" data-task="due-for-coaching">
+          <div class="task-head">
+            <h2>Due for Coaching</h2>
+            <span class="status-dot" data-role="dot"></span>
+          </div>
+          <p class="task-copy">
+            Open Due for Coaching, play each event clip, then Complete Session.
+          </p>
+          <dl class="task-stats">
+            <div><dt>State</dt><dd data-role="state">idle</dd></div>
+            <div><dt>Remaining</dt><dd data-role="detail">—</dd></div>
+          </dl>
+          <div class="task-actions">
+            <button type="button" class="btn primary" data-action="start">Start</button>
+            <button type="button" class="btn" data-action="stop">Stop</button>
+          </div>
+        </article>
+
         <article class="task-panel task-panel-link">
           <div class="task-head">
             <h2>Depot Monitor</h2>
@@ -86,7 +104,7 @@
         <div class="section-head">
           <div>
             <h2>Activity</h2>
-            <p>Latest lines from allocate or FYI.</p>
+            <p>Latest lines from allocate, FYI, or coaching.</p>
           </div>
           <div class="log-tabs" id="logTabs"></div>
         </div>
@@ -94,6 +112,6 @@
       </section>
     </main>
 
-    <script type="module" src="/app.js"></script>
+    <script type="module" src="/app.js?v=20260723a"></script>
   </body>
 </html>

@@ -2,6 +2,7 @@ import { loadEnvFile } from "./loadEnv.js";
 import { loadConfig } from "./config.js";
 import { runAllocateDrivers } from "./tasks/allocateDrivers.js";
 import { runFyiNotify } from "./tasks/fyiNotify.js";
+import { runDueForCoaching } from "./tasks/dueForCoaching.js";
 import { runDepotMonitor } from "./tasks/depotMonitor.js";
 
 loadEnvFile();
@@ -31,7 +32,8 @@ function parseArgs(argv) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const relaxValidation = args.task === "fyi-notify";
+  const relaxValidation =
+    args.task === "fyi-notify" || args.task === "due-for-coaching";
   const config = loadConfig({
     configPath: args.configPath,
     relaxValidation,
@@ -44,12 +46,17 @@ async function main() {
     case "fyi-notify":
       await runFyiNotify(config);
       break;
+    case "due-for-coaching":
+      await runDueForCoaching(config);
+      break;
     case "depot-monitor":
       await runDepotMonitor(config);
       break;
     default:
       console.error(`Unknown task: ${args.task}`);
-      console.error("Available tasks: allocate-drivers, fyi-notify, depot-monitor");
+      console.error(
+        "Available tasks: allocate-drivers, fyi-notify, due-for-coaching, depot-monitor"
+      );
       process.exitCode = 1;
   }
 }

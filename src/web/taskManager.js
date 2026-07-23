@@ -20,6 +20,12 @@ export const TASKS = [
     cli: "fyi-notify",
   },
   {
+    id: "due-for-coaching",
+    name: "Due for Coaching",
+    summary: "Clear Lytx Due for Coaching (play clips → Complete Session).",
+    cli: "due-for-coaching",
+  },
+  {
     id: "depot-monitor",
     name: "Depot Monitor",
     summary: "Watch trucks and alert when they enter Boksburg depot.",

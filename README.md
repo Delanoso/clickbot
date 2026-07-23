@@ -100,6 +100,22 @@ Same Lytx login. From the Driver Safety dashboard:
 npm run fyi
 ```
 
+## Task 2b: Due for Coaching (Lytx only)
+
+Same Lytx login. From the Driver Safety dashboard:
+
+1. Open **DUE FOR COACHING**
+2. Click **Coach Event** / **Coach N Events** on a card
+3. Play each event video for at least 1 second
+   - Multiple videos: step through the carousel and play each
+   - Single video: scroll to the player and press **Play**
+4. Scroll to **Complete Session** → **Complete** → **Close**
+5. Repeat until the Due for Coaching queue is empty
+
+```bash
+npm run coach
+```
+
 ## Task 3: Depot monitor (Webfleet only)
 
 This task watches a list of trucks in Webfleet and alerts when one of them

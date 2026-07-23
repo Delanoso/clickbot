@@ -147,6 +147,15 @@
             "name": "Yes, Confirm"
           }
         }
+      },
+      "coaching": {
+        "workUrl": "https://app.lytx.com/#/driver-safety/tasks/dueforcoaching",
+        "selectors": {
+          "openTile": {
+            "text": "DUE FOR COACHING"
+          },
+          "minPlayMs": 1100
+        }
       }
     },
     "fleet": {

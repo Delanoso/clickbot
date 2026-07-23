@@ -8,6 +8,7 @@
     "start": "node src/index.js",
     "allocate": "node src/index.js allocate-drivers",
     "fyi": "node src/index.js fyi-notify",
+    "coach": "node src/index.js due-for-coaching",
     "depot": "node src/index.js depot-monitor",
     "dashboard": "node src/web/server.js",
     "explore": "node src/explore.js",

@@ -65,7 +65,7 @@ function renderTasks(tasks) {
       detail = task.status?.lastTruck
         ? `${task.status.lastTruck} → ${task.status.lastDriver || "?"}`
         : task.status?.message || "—";
-    } else if (task.id === "fyi-notify") {
+    } else if (task.id === "fyi-notify" || task.id === "due-for-coaching") {
       detail =
         task.status?.remaining != null
           ? String(task.status.remaining)
