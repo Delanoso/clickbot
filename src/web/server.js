@@ -69,6 +69,14 @@ function readBody(req) {
 function serveStatic(req, res, urlPath) {
   let relative = urlPath === "/" ? "/index.html" : urlPath;
   if (relative === "/depot" || relative === "/depot/") relative = "/depot.html";
+  if (
+    relative === "/incidents-drivers" ||
+    relative === "/incidents-drivers/" ||
+    relative === "/incidents" ||
+    relative === "/incidents/"
+  ) {
+    relative = "/incidents-drivers.html";
+  }
   relative = relative.split("?")[0];
   const filePath = join(publicDir, relative);
   if (!filePath.startsWith(publicDir) || !existsSync(filePath) || statSync(filePath).isDirectory()) {
