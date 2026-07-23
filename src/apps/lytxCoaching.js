@@ -240,84 +240,97 @@ async function readEventVideoCount(page) {
   return thumbs.length;
 }
 
-async function listEventThumbnailLocators(page) {
-  // Prefer thumbnails that live under the Event Videos section only.
-  const scoped = await page.evaluate(() => {
+async function tagEventThumbnails(page) {
+  return page.evaluate(() => {
+    // Clear previous tags.
+    document.querySelectorAll("[data-coach-thumb]").forEach((el) => {
+      el.removeAttribute("data-coach-thumb");
+    });
+
     const heading = [...document.querySelectorAll("h1,h2,h3,h4,div,span,p")].find((el) =>
+      /Event Videos?\s*:/i.test((el.textContent || "").trim()) ||
       /^Event Videos?/i.test((el.textContent || "").trim())
     );
-    if (!heading) return [];
 
-    let root = heading.parentElement;
-    for (let depth = 0; depth < 6 && root; depth += 1) {
-      const imgs = [...root.querySelectorAll("img")].filter((img) => {
-        const r = img.getBoundingClientRect();
-        return r.width >= 60 && r.height >= 40 && r.bottom > 0 && r.top < window.innerHeight + 200;
-      });
-      if (imgs.length >= 1) {
-        return imgs.map((img, index) => {
-          // Prefer clickable ancestor button/div.
-          const clickable =
-            img.closest("button, a, [role='button'], [tabindex]") || img;
-          clickable.setAttribute("data-coach-thumb", String(index));
-          return index;
-        });
+    const roots = [];
+    if (heading) {
+      let root = heading.parentElement;
+      for (let depth = 0; depth < 8 && root; depth += 1) {
+        roots.push(root);
+        root = root.parentElement;
       }
-      root = root.parentElement;
+    } else {
+      roots.push(document.body);
     }
-    return [];
+
+    const seen = new Set();
+    const clickables = [];
+    for (const root of roots) {
+      const imgs = [...root.querySelectorAll("img")];
+      for (const img of imgs) {
+        const r = img.getBoundingClientRect();
+        if (r.width < 50 || r.height < 35) continue;
+        const clickable =
+          img.closest("button, a, [role='button'], [tabindex]") || img.parentElement || img;
+        if (!clickable || seen.has(clickable)) continue;
+        seen.add(clickable);
+        clickables.push(clickable);
+      }
+      if (clickables.length >= 1) break;
+    }
+
+    clickables.forEach((el, index) => {
+      el.setAttribute("data-coach-thumb", String(index));
+    });
+    return clickables.length;
   });
-
-  if (scoped.length) {
-    const out = [];
-    for (const index of scoped) {
-      const tile = page.locator(`[data-coach-thumb="${index}"]`).first();
-      if (await tile.count()) out.push(tile);
-    }
-    if (out.length) return out;
-  }
-
-  // Fallback: visible medium/large images (carousel tiles).
-  const imgs = page.locator("img");
-  const imgCount = await imgs.count().catch(() => 0);
-  const out = [];
-  for (let i = 0; i < imgCount; i += 1) {
-    const img = imgs.nth(i);
-    if (!(await img.isVisible().catch(() => false))) continue;
-    const box = await img.boundingBox().catch(() => null);
-    if (!box || box.width < 60 || box.height < 40) continue;
-    out.push(img);
-  }
-  return out.slice(0, 12);
 }
 
 /**
- * Multi-video: click each thumbnail/image, wait 2 seconds, then the next.
+ * Multi-video: click EVERY thumbnail in order — 1, 2, 3, … — wait 2s between each.
+ * Event 1 must always be clicked too (even if already selected).
  */
 async function playMultipleEventThumbnails(page, eventCount, { thumbWaitMs = 2000 } = {}) {
   await scrollToEventVideosHeading(page);
-  let played = 0;
+  let tagged = await tagEventThumbnails(page);
+  console.log(
+    `[coaching] Will click events 1..${eventCount} (${tagged} thumbnail(s) tagged)`
+  );
 
+  let played = 0;
   for (let i = 0; i < eventCount; i += 1) {
-    // Re-query each time — Lytx re-renders tiles as VIEWED.
-    const thumbs = await listEventThumbnailLocators(page);
-    console.log(`[coaching] Found ${thumbs.length} event thumbnail(s)`);
-    const tile = thumbs[Math.min(i, Math.max(thumbs.length - 1, 0))];
-    if (!tile) {
+    // Keep carousel advanced so later thumbs stay findable.
+    if (i > 0 && i >= tagged) {
       const nextArrow = page
         .locator("button[aria-label*='next' i], button[aria-label*='Next' i]")
         .first();
       if (await nextArrow.isVisible().catch(() => false)) {
         await clickStable(nextArrow);
-        console.log(`[coaching] Advanced carousel for event ${i + 1}/${eventCount}`);
-      } else {
-        console.log(`[coaching] No thumbnail for event ${i + 1}/${eventCount}`);
+        await sleep(400);
+        tagged = await tagEventThumbnails(page);
       }
-    } else {
+    }
+
+    const byAttr = page.locator(`[data-coach-thumb="${i}"]`).first();
+    const byNth = page.locator("[data-coach-thumb]").nth(i);
+    let tile = null;
+    if (await byAttr.count()) tile = byAttr;
+    else if ((await page.locator("[data-coach-thumb]").count()) > i) tile = byNth;
+
+    if (!tile) {
+      // Last resort: retag and take nth image under Event Videos.
+      tagged = await tagEventThumbnails(page);
+      tile = page.locator("[data-coach-thumb]").nth(Math.min(i, Math.max(tagged - 1, 0)));
+    }
+
+    if (await tile.count()) {
       await tile.scrollIntoViewIfNeeded().catch(() => {});
       await clickStable(tile);
-      console.log(`[coaching] Clicked event thumbnail ${i + 1}/${eventCount}`);
+      console.log(`[coaching] Clicked event ${i + 1}/${eventCount}`);
+    } else {
+      console.log(`[coaching] MISSED event ${i + 1}/${eventCount} — no thumbnail to click`);
     }
+
     await sleep(thumbWaitMs);
     played += 1;
   }
