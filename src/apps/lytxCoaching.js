@@ -154,30 +154,27 @@ export async function coachOneSession(page, selectors = {}) {
 }
 
 /**
- * Play every event clip (≥1s each) and keep going until Lytx shows the session
- * is ready to complete (0 behaviors left and/or Complete Session visible).
+ * Play clips until Complete Session appears.
+ *
+ * - Multiple videos: click each carousel thumbnail/image, wait 2s, next
+ * - Single video: scroll down a bit and click the actual Play button
  */
 async function playAllEventVideosUntilReady(page, selectors = {}) {
+  const thumbWaitMs = Number(selectors.thumbWaitMs || 2000);
   const minPlayMs = Number(selectors.minPlayMs || 1100);
-  const maxPasses = Number(selectors.maxPlayPasses || 4);
+  const maxPasses = Number(selectors.maxPlayPasses || 3);
   let totalPlays = 0;
 
   for (let pass = 1; pass <= maxPasses; pass += 1) {
-    await scrollToEventPlayer(page);
+    await scrollToEventVideosHeading(page);
     const eventCount = (await readEventVideoCount(page)) || 1;
     console.log(`[coaching] Play pass ${pass}/${maxPasses} — ${eventCount} event(s)`);
 
     if (eventCount <= 1) {
-      await playCurrentVideo(page, { minPlayMs, forceScroll: true });
+      await playSingleEventWithPlayButton(page, { minPlayMs });
       totalPlays += 1;
     } else {
-      for (let i = 0; i < eventCount; i += 1) {
-        console.log(`[coaching] Playing event ${i + 1}/${eventCount}`);
-        await selectEventThumbnail(page, i, eventCount);
-        await scrollToEventPlayer(page);
-        await playCurrentVideo(page, { minPlayMs, forceScroll: true });
-        totalPlays += 1;
-      }
+      totalPlays += await playMultipleEventThumbnails(page, eventCount, { thumbWaitMs });
     }
 
     const ready = await sessionReadyToComplete(page);
@@ -185,16 +182,11 @@ async function playAllEventVideosUntilReady(page, selectors = {}) {
       console.log(`[coaching] Session ready to complete (${ready})`);
       return totalPlays;
     }
-
-    console.log(
-      "[coaching] Not ready yet (Complete Session still hidden) — replaying remaining clips"
-    );
+    console.log("[coaching] Complete Session not visible yet — another play pass");
   }
 
-  // One last readiness check before giving up.
   const ready = await sessionReadyToComplete(page, { timeoutMs: 5000 });
   if (ready) return totalPlays;
-
   throw new Error(
     "Played event videos but Complete Session did not appear — clips may not have registered as viewed"
   );
@@ -203,13 +195,6 @@ async function playAllEventVideosUntilReady(page, selectors = {}) {
 async function sessionReadyToComplete(page, { timeoutMs = 8000 } = {}) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    const zeroBehaviors = await page
-      .getByText(/0 Behaviors Left to Coach/i)
-      .first()
-      .isVisible()
-      .catch(() => false);
-
-    // Peek at the bottom without requiring the button yet.
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)).catch(() => {});
     const completeVisible = await page
       .locator("button, a, [role='button']")
@@ -217,54 +202,27 @@ async function sessionReadyToComplete(page, { timeoutMs = 8000 } = {}) {
       .first()
       .isVisible()
       .catch(() => false);
-
     if (completeVisible) return "complete-session-visible";
-    if (zeroBehaviors) {
-      // Behaviors cleared but button may still be painting — keep scrolling briefly.
-      await sleep(500);
-      if (
-        await page
-          .locator("button, a, [role='button']")
-          .filter({ hasText: /Complete Session/i })
-          .first()
-          .isVisible()
-          .catch(() => false)
-      ) {
-        return "complete-session-visible";
-      }
-      return "zero-behaviors";
-    }
 
-    // Scroll back up to the player for another pass.
-    await scrollToEventPlayer(page);
+    const zeroBehaviors = await page
+      .getByText(/0 Behaviors Left to Coach/i)
+      .first()
+      .isVisible()
+      .catch(() => false);
+    if (zeroBehaviors) return "zero-behaviors";
+
+    await scrollToEventVideosHeading(page);
     await sleep(400);
   }
   return null;
 }
 
-async function playAllEventVideos(page, selectors = {}) {
-  return playAllEventVideosUntilReady(page, selectors);
-}
-
-async function scrollToEventPlayer(page) {
+async function scrollToEventVideosHeading(page) {
   const heading = page.getByText(/Event Videos?/i).first();
   if (await heading.isVisible().catch(() => false)) {
     await heading.scrollIntoViewIfNeeded().catch(() => {});
   }
-  await page
-    .evaluate(() => {
-      const video = document.querySelector("video");
-      if (video) {
-        video.scrollIntoView({ block: "center", behavior: "instant" });
-        return;
-      }
-      const label = [...document.querySelectorAll("h1,h2,h3,h4,div,span")].find((el) =>
-        /Event Videos?/i.test((el.textContent || "").trim())
-      );
-      label?.scrollIntoView({ block: "start", behavior: "instant" });
-    })
-    .catch(() => {});
-  await sleep(500);
+  await sleep(300);
 }
 
 async function readEventVideoCount(page) {
@@ -278,247 +236,127 @@ async function readEventVideoCount(page) {
   });
   if (fromText && fromText > 0) return fromText;
 
-  const thumbs = await eventThumbnails(page);
-  return thumbs;
+  const thumbs = await listEventThumbnailLocators(page);
+  return thumbs.length;
 }
 
-async function eventThumbnails(page) {
-  // Prefer carousel items that look like event IDs / viewed chips.
+async function listEventThumbnailLocators(page) {
+  // Carousel event images / tiles under Event Videos.
   const candidates = page.locator(
     [
-      "[class*='carousel'] button",
-      "[class*='Carousel'] button",
-      "[class*='event'] img",
-      "img[src*='event']",
+      "[class*='carousel'] button:has(img)",
+      "[class*='Carousel'] button:has(img)",
+      "[class*='event'] button:has(img)",
       "button:has(img)",
     ].join(", ")
   );
   const count = await candidates.count().catch(() => 0);
-  if (count > 0) return count;
+  const out = [];
+  for (let i = 0; i < count; i += 1) {
+    const tile = candidates.nth(i);
+    if (await tile.isVisible().catch(() => false)) out.push(tile);
+  }
+  if (out.length) return out;
 
-  // Fallback: count green check / VIEWED tiles near Event Videos heading.
-  return page.evaluate(() => {
-    const heading = [...document.querySelectorAll("h1,h2,h3,h4,div,span")].find((el) =>
-      /Event Videos/i.test((el.textContent || "").trim())
-    );
-    if (!heading) return 0;
-    let root = heading.parentElement;
-    for (let i = 0; i < 4 && root; i += 1) {
-      const imgs = root.querySelectorAll("img");
-      if (imgs.length) return imgs.length;
-      root = root.parentElement;
-    }
-    return 0;
-  });
+  // Fallback: images near the Event Videos heading.
+  const imgs = page.locator("img");
+  const imgCount = await imgs.count().catch(() => 0);
+  for (let i = 0; i < imgCount; i += 1) {
+    const img = imgs.nth(i);
+    if (!(await img.isVisible().catch(() => false))) continue;
+    // Skip tiny icons.
+    const box = await img.boundingBox().catch(() => null);
+    if (!box || box.width < 40 || box.height < 40) continue;
+    out.push(img);
+  }
+  return out;
 }
 
-async function selectEventThumbnail(page, index, total) {
-  // Try clicking the Nth visible event tile / image button under Event Videos.
-  const tiles = page.locator(
-    "button:has(img), [class*='carousel'] button, [class*='event-card'], [class*='EventCard']"
-  );
-  const tileCount = await tiles.count().catch(() => 0);
-  if (tileCount > index) {
-    const tile = tiles.nth(index);
-    if (await tile.isVisible().catch(() => false)) {
+/**
+ * Multi-video: click each thumbnail/image, wait 2 seconds, then the next.
+ */
+async function playMultipleEventThumbnails(page, eventCount, { thumbWaitMs = 2000 } = {}) {
+  await scrollToEventVideosHeading(page);
+  let played = 0;
+
+  for (let i = 0; i < eventCount; i += 1) {
+    const thumbs = await listEventThumbnailLocators(page);
+    const tile = thumbs[i] || thumbs[thumbs.length - 1];
+    if (!tile) {
+      // Advance with next arrow if thumbnails are virtualized.
+      const nextArrow = page
+        .locator("button[aria-label*='next' i], button[aria-label*='Next' i]")
+        .first();
+      if (await nextArrow.isVisible().catch(() => false)) {
+        await clickStable(nextArrow);
+      }
+    } else {
       await tile.scrollIntoViewIfNeeded().catch(() => {});
       await clickStable(tile);
-      await sleep(800);
-      return;
+      console.log(`[coaching] Clicked event thumbnail ${i + 1}/${eventCount}`);
     }
+    await sleep(thumbWaitMs);
+    played += 1;
   }
-
-  if (index === 0) return;
-
-  const nextArrow = page
-    .locator(
-      "button[aria-label*='next' i], button[aria-label*='Next' i], button[aria-label*='forward' i]"
-    )
-    .or(page.getByRole("button", { name: /next/i }))
-    .first();
-  if (await nextArrow.isVisible().catch(() => false)) {
-    await clickStable(nextArrow);
-    await sleep(800);
-  }
+  return played;
 }
 
-async function playCurrentVideo(page, { minPlayMs = 1100, forceScroll = false } = {}) {
-  if (forceScroll) await scrollToEventPlayer(page);
+/**
+ * Single video: scroll down a bit and click the actual Play button.
+ */
+async function playSingleEventWithPlayButton(page, { minPlayMs = 1100 } = {}) {
+  await scrollToEventVideosHeading(page);
+  await page.evaluate(() => window.scrollBy(0, 320)).catch(() => {});
+  await sleep(400);
 
-  // Hover the player so custom controls appear.
-  const video = page.locator("video").first();
-  if (await video.isVisible().catch(() => false)) {
-    await video.hover().catch(() => {});
-    await sleep(250);
-  }
-
-  const clicked = await clickPlayControl(page);
-  if (!clicked) {
-    // Last resorts: click the video surface, then Space.
-    if (await video.isVisible().catch(() => false)) {
-      await video.click({ force: true }).catch(() => {});
-      await page.evaluate(() => {
-        const v = document.querySelector("video");
-        if (v) {
-          v.muted = true;
-          const p = v.play?.();
-          if (p && typeof p.catch === "function") p.catch(() => {});
-        }
-      }).catch(() => {});
-      console.log("[coaching] Play via video element / media.play()");
-    } else {
-      await page.keyboard.press("Space").catch(() => {});
-      console.log("[coaching] Play via Space (no video node found)");
-    }
-  } else {
-    console.log(`[coaching] Play clicked (${clicked})`);
-  }
-
-  await sleep(minPlayMs);
-
-  // Best-effort: if still paused, try once more.
-  const paused = await page
-    .evaluate(() => {
-      const v = document.querySelector("video");
-      return v ? v.paused : null;
-    })
-    .catch(() => null);
-  if (paused === true) {
-    await clickPlayControl(page);
-    await page
-      .evaluate(() => {
-        const v = document.querySelector("video");
-        if (v) {
-          v.muted = true;
-          const p = v.play?.();
-          if (p && typeof p.catch === "function") p.catch(() => {});
-        }
-      })
-      .catch(() => {});
-    await sleep(minPlayMs);
-  }
-}
-
-async function clickPlayControl(page) {
-  // 1) Accessible name / aria
-  const named = page
+  const play = page
     .getByRole("button", { name: /^(Play|Play video|Play clip)$/i })
     .or(page.locator("button[aria-label*='Play' i], [aria-label='Play'], [title='Play']"))
+    .or(page.locator("button.vjs-play-control, .vjs-big-play-button, button[class*='play' i]"))
     .first();
-  if (await named.isVisible().catch(() => false)) {
-    await clickStable(named, { forceAfterMs: 1500 });
-    return "named";
-  }
 
-  // 2) Common player class names
-  const classic = page
-    .locator(
-      [
-        "button.vjs-play-control",
-        ".vjs-play-control",
-        "button.vjs-big-play-button",
-        ".vjs-big-play-button",
-        "button[class*='play' i]",
-        "[class*='PlayButton' i]",
-        "[data-test-id*='play' i]",
-      ].join(", ")
-    )
-    .first();
-  if (await classic.isVisible().catch(() => false)) {
-    await clickStable(classic, { forceAfterMs: 1500 });
-    return "classic";
-  }
-
-  // 3) DOM heuristic: visible control near the video with a play icon / empty center button
-  const viaDom = await page.evaluate(() => {
-    const visible = (el) => {
-      const r = el.getBoundingClientRect();
-      const style = window.getComputedStyle(el);
-      return (
-        r.width > 8 &&
-        r.height > 8 &&
-        style.visibility !== "hidden" &&
-        style.display !== "none" &&
-        style.opacity !== "0"
-      );
-    };
-
-    const video = document.querySelector("video");
-    const videoRect = video?.getBoundingClientRect();
-
-    const score = (el) => {
-      const r = el.getBoundingClientRect();
-      let s = 0;
-      const aria = `${el.getAttribute("aria-label") || ""} ${el.getAttribute("title") || ""}`.toLowerCase();
-      const cls = (el.className || "").toString().toLowerCase();
-      const text = (el.textContent || "").trim().toLowerCase();
-      if (/play/.test(aria) || /play/.test(cls) || text === "play") s += 50;
-      if (/pause/.test(aria) || /pause/.test(cls)) s -= 100;
-      if (videoRect) {
-        const cx = r.left + r.width / 2;
-        const cy = r.top + r.height / 2;
-        const nearX = Math.abs(cx - (videoRect.left + videoRect.width / 2));
-        const nearY = Math.abs(cy - (videoRect.bottom + 20));
-        s += Math.max(0, 40 - nearX / 20);
-        s += Math.max(0, 40 - nearY / 10);
+  if (await play.isVisible().catch(() => false)) {
+    await play.scrollIntoViewIfNeeded().catch(() => {});
+    await clickStable(play, { forceAfterMs: 2000 });
+    console.log("[coaching] Clicked Play button (single video)");
+  } else {
+    // Fallback: center control near video via DOM.
+    const clicked = await page.evaluate(() => {
+      const video = document.querySelector("video");
+      if (video) {
+        video.scrollIntoView({ block: "center" });
+        video.muted = true;
       }
-      // Centered small control buttons are usually play.
-      if (r.width >= 24 && r.width <= 72 && r.height >= 24 && r.height <= 72) s += 15;
-      return s;
-    };
-
-    const nodes = [
-      ...document.querySelectorAll("button, [role='button'], a, div, span, i, svg"),
-    ].filter(visible);
-    nodes.sort((a, b) => score(b) - score(a));
-    const best = nodes[0];
-    if (best && score(best) >= 40) {
-      best.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
-      return true;
-    }
-
-    // Big overlay play in the middle of the video.
-    if (videoRect) {
-      const mid = nodes.find((el) => {
-        const r = el.getBoundingClientRect();
-        const cx = r.left + r.width / 2;
-        const cy = r.top + r.height / 2;
-        return (
-          cx > videoRect.left + videoRect.width * 0.35 &&
-          cx < videoRect.left + videoRect.width * 0.65 &&
-          cy > videoRect.top + videoRect.height * 0.35 &&
-          cy < videoRect.top + videoRect.height * 0.65 &&
-          r.width >= 30 &&
-          r.width <= 120
-        );
-      });
-      if (mid) {
-        mid.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+      const btn = [...document.querySelectorAll("button, [role='button'], div, span")].find(
+        (el) => {
+          const aria = `${el.getAttribute("aria-label") || ""} ${el.getAttribute("title") || ""}`.toLowerCase();
+          const cls = String(el.className || "").toLowerCase();
+          return /play/.test(aria) || /play/.test(cls);
+        }
+      );
+      if (btn) {
+        btn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
         return true;
       }
-    }
-    return false;
-  });
-
-  return viaDom ? "dom" : null;
-}
-
-async function waitForBehaviorsCleared(page, { timeoutMs = 15000 } = {}) {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    const cleared = await page
-      .getByText(/0 Behaviors Left to Coach/i)
-      .first()
-      .isVisible()
-      .catch(() => false);
-    if (cleared) return true;
-    await sleep(500);
+      if (video) {
+        video.click();
+        const p = video.play?.();
+        if (p && typeof p.catch === "function") p.catch(() => {});
+        return true;
+      }
+      return false;
+    });
+    console.log(
+      clicked
+        ? "[coaching] Clicked Play via DOM/video (single video)"
+        : "[coaching] Play button not found (single video)"
+    );
   }
-  return false;
+  await sleep(minPlayMs);
 }
 
 async function completeCoachingSession(page) {
-  // Only call this after sessionReadyToComplete — button appears once all clips played.
+  // Only after all videos played — Complete Session is at the bottom.
   console.log("[coaching] Looking for Complete Session at bottom of page…");
 
   for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -531,57 +369,48 @@ async function completeCoachingSession(page) {
       .first();
 
     if (await completeSession.isVisible().catch(() => false)) {
-      await completeSession.scrollIntoViewIfNeeded().catch(() => {});
-      await sleep(300);
       if (await completeSession.isDisabled().catch(() => false)) {
-        console.log("[coaching] Complete Session still disabled — clips not fully registered");
-        await scrollToEventPlayer(page);
-        await playCurrentVideo(page, { minPlayMs: 1200, forceScroll: true });
+        console.log("[coaching] Complete Session disabled — need another play pass");
+        await playSingleEventWithPlayButton(page, { minPlayMs: 1200 });
         continue;
       }
+      await completeSession.scrollIntoViewIfNeeded().catch(() => {});
       await clickStable(completeSession, { forceAfterMs: 3000 });
       console.log("[coaching] Clicked Complete Session");
       break;
     }
 
     if (attempt === 7) {
-      const snippet = await page.evaluate(() =>
-        (document.body?.innerText || "").slice(-800)
-      );
-      throw new Error(
-        `Complete Session not visible yet (videos may still be unplayed). Page tail: ${snippet
-          .replace(/\s+/g, " ")
-          .slice(0, 400)}`
-      );
+      throw new Error("Complete Session not visible after playing videos");
     }
-
-    // Button still missing — play current clip again, then re-check.
-    console.log("[coaching] Complete Session not visible — playing current clip again");
-    await scrollToEventPlayer(page);
-    await playCurrentVideo(page, { minPlayMs: 1200, forceScroll: true });
+    console.log("[coaching] Complete Session not visible — retry play");
+    await playSingleEventWithPlayButton(page, { minPlayMs: 1200 });
   }
 
-  // Modal: Save and complete your coaching session? → Complete
-  const dialogComplete = page
-    .getByRole("dialog")
-    .getByRole("button", { name: /^Complete$/i })
-    .first();
-  const anyComplete = page
-    .locator("button, [role='button']")
-    .filter({ hasText: /^Complete$/i })
+  // Modal: "Save and complete your coaching session?" → Complete
+  await page
+    .getByText(/Save and complete your coaching session|Complete Coaching Session/i)
+    .first()
+    .waitFor({ state: "visible", timeout: 30000 })
+    .catch(() => {});
+  await sleep(400);
+
+  const modalComplete = page
+    .locator("#modalShellPrimaryButton")
+    .or(
+      page
+        .locator("ngb-modal-window, .modal.show, [role='dialog']")
+        .locator("button, [role='button']")
+        .filter({ hasText: /^Complete$/i })
+    )
+    .or(page.getByRole("button", { name: /^Complete$/i }))
     .first();
 
-  if (await dialogComplete.isVisible().catch(() => false)) {
-    await sleep(300);
-    await clickStable(dialogComplete, { forceAfterMs: 2000 });
-  } else {
-    await anyComplete.waitFor({ state: "visible", timeout: 30000 });
-    await sleep(300);
-    await clickStable(anyComplete, { forceAfterMs: 2000 });
-  }
+  await modalComplete.waitFor({ state: "visible", timeout: 30000 });
+  await clickStable(modalComplete, { forceAfterMs: 2000 });
   console.log("[coaching] Confirmed Complete in modal");
 
-  // Saved modal → Close (not Download PDF)
+  // Saved modal → Close
   await page
     .getByText(/Coaching session saved/i)
     .first()
@@ -589,12 +418,12 @@ async function completeCoachingSession(page) {
     .catch(() => {});
 
   const closeBtn = page
-    .getByRole("dialog")
-    .getByRole("button", { name: /^Close$/i })
-    .or(page.locator("button, [role='button']").filter({ hasText: /^Close$/i }))
+    .locator("ngb-modal-window, .modal.show, [role='dialog']")
+    .locator("button, [role='button']")
+    .filter({ hasText: /^Close$/i })
+    .or(page.getByRole("button", { name: /^Close$/i }))
     .first();
   await closeBtn.waitFor({ state: "visible", timeout: 30000 });
-  await sleep(300);
   await clickStable(closeBtn, { forceAfterMs: 2000 });
   await closeBtn.waitFor({ state: "hidden", timeout: 30000 }).catch(() => {});
   await dismissOverlays(page);
