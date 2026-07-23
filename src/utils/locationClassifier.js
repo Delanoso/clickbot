@@ -101,15 +101,14 @@ export function classifyLocation(locationText, depotConfig = DEFAULT_DEPOT_AREAS
 
   if (isDepotLocation(text, depotConfig)) return "depot";
 
+  // Depot-site leftovers (Windmill Park / Salfin / HFR) must never fall into yellow.
+  if (hasExcludedArea(text)) return "other";
+
   const postalHit = matchesJohannesburgPostal(text);
   const suburbHit = matchesJohannesburgSuburb(text);
   const keywordHit = matchesJohannesburgKeyword(text);
-  const excluded = hasExcludedArea(text);
 
-  // CoJ postal codes are authoritative even when a nearby-town name appears.
-  if (postalHit) return "johannesburg";
-  if (keywordHit && !excluded) return "johannesburg";
-  if (suburbHit && !excluded) return "johannesburg";
+  if (postalHit || keywordHit || suburbHit) return "johannesburg";
 
   return "other";
 }

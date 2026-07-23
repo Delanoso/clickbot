@@ -30,12 +30,20 @@ assert.equal(classifyLocation("Fourways, JHB"), "johannesburg");
 assert.equal(matchesJohannesburgPostal("Somewhere 2090 ZA"), true);
 assert.equal(matchesJohannesburgSuburb("Truck at Roodepoort industrial"), true);
 
-// East Rand towns without CoJ postal should not count as Johannesburg.
-assert.equal(classifyLocation("Benoni 1501, ZA"), "other");
-assert.equal(classifyLocation("Germiston, Ekurhuleni"), "other");
-assert.equal(classifyLocation("Kempton Park"), "other");
+// Greater Johannesburg / East Rand suburbs must show under Johannesburg.
+assert.equal(classifyLocation("Benoni 1501, ZA"), "johannesburg");
+assert.equal(classifyLocation("Germiston, Ekurhuleni"), "johannesburg");
+assert.equal(classifyLocation("Kempton Park"), "johannesburg");
+assert.equal(classifyLocation("Isando, Kempton Park 1600"), "johannesburg");
+assert.equal(classifyLocation("Jet Park, Boksburg"), "johannesburg");
+assert.equal(classifyLocation("Alberton 1449"), "johannesburg");
+assert.equal(classifyLocation("Edenvale"), "johannesburg");
+assert.equal(classifyLocation("Springs 1559"), "johannesburg");
+assert.equal(classifyLocation("Vosloorus"), "johannesburg");
+assert.equal(classifyLocation("OR Tambo Airport, Kempton Park"), "johannesburg");
 
 assert.equal(classifyLocation(""), "other");
 assert.equal(classifyLocation("Durban harbour"), "other");
+assert.equal(classifyLocation("Orkney, North West"), "other");
 
 console.log("locationClassifier.test.js passed");
