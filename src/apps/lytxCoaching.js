@@ -241,35 +241,54 @@ async function readEventVideoCount(page) {
 }
 
 async function listEventThumbnailLocators(page) {
-  // Carousel event images / tiles under Event Videos.
-  const candidates = page.locator(
-    [
-      "[class*='carousel'] button:has(img)",
-      "[class*='Carousel'] button:has(img)",
-      "[class*='event'] button:has(img)",
-      "button:has(img)",
-    ].join(", ")
-  );
-  const count = await candidates.count().catch(() => 0);
-  const out = [];
-  for (let i = 0; i < count; i += 1) {
-    const tile = candidates.nth(i);
-    if (await tile.isVisible().catch(() => false)) out.push(tile);
-  }
-  if (out.length) return out;
+  // Prefer thumbnails that live under the Event Videos section only.
+  const scoped = await page.evaluate(() => {
+    const heading = [...document.querySelectorAll("h1,h2,h3,h4,div,span,p")].find((el) =>
+      /^Event Videos?/i.test((el.textContent || "").trim())
+    );
+    if (!heading) return [];
 
-  // Fallback: images near the Event Videos heading.
+    let root = heading.parentElement;
+    for (let depth = 0; depth < 6 && root; depth += 1) {
+      const imgs = [...root.querySelectorAll("img")].filter((img) => {
+        const r = img.getBoundingClientRect();
+        return r.width >= 60 && r.height >= 40 && r.bottom > 0 && r.top < window.innerHeight + 200;
+      });
+      if (imgs.length >= 1) {
+        return imgs.map((img, index) => {
+          // Prefer clickable ancestor button/div.
+          const clickable =
+            img.closest("button, a, [role='button'], [tabindex]") || img;
+          clickable.setAttribute("data-coach-thumb", String(index));
+          return index;
+        });
+      }
+      root = root.parentElement;
+    }
+    return [];
+  });
+
+  if (scoped.length) {
+    const out = [];
+    for (const index of scoped) {
+      const tile = page.locator(`[data-coach-thumb="${index}"]`).first();
+      if (await tile.count()) out.push(tile);
+    }
+    if (out.length) return out;
+  }
+
+  // Fallback: visible medium/large images (carousel tiles).
   const imgs = page.locator("img");
   const imgCount = await imgs.count().catch(() => 0);
+  const out = [];
   for (let i = 0; i < imgCount; i += 1) {
     const img = imgs.nth(i);
     if (!(await img.isVisible().catch(() => false))) continue;
-    // Skip tiny icons.
     const box = await img.boundingBox().catch(() => null);
-    if (!box || box.width < 40 || box.height < 40) continue;
+    if (!box || box.width < 60 || box.height < 40) continue;
     out.push(img);
   }
-  return out;
+  return out.slice(0, 12);
 }
 
 /**
@@ -280,15 +299,19 @@ async function playMultipleEventThumbnails(page, eventCount, { thumbWaitMs = 200
   let played = 0;
 
   for (let i = 0; i < eventCount; i += 1) {
+    // Re-query each time — Lytx re-renders tiles as VIEWED.
     const thumbs = await listEventThumbnailLocators(page);
-    const tile = thumbs[i] || thumbs[thumbs.length - 1];
+    console.log(`[coaching] Found ${thumbs.length} event thumbnail(s)`);
+    const tile = thumbs[Math.min(i, Math.max(thumbs.length - 1, 0))];
     if (!tile) {
-      // Advance with next arrow if thumbnails are virtualized.
       const nextArrow = page
         .locator("button[aria-label*='next' i], button[aria-label*='Next' i]")
         .first();
       if (await nextArrow.isVisible().catch(() => false)) {
         await clickStable(nextArrow);
+        console.log(`[coaching] Advanced carousel for event ${i + 1}/${eventCount}`);
+      } else {
+        console.log(`[coaching] No thumbnail for event ${i + 1}/${eventCount}`);
       }
     } else {
       await tile.scrollIntoViewIfNeeded().catch(() => {});
