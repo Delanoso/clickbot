@@ -10,18 +10,27 @@ import { incidentsTruckIds } from "../web/incidentsConfig.js";
 
 export async function runIncidentsMonitor(config) {
   const section = config.incidentsDrivers || {};
+  // Only reuse depot area terms / Webfleet map selectors for location matching —
+  // never the depot truck or driver list (incidentsDrivers.trucks is independent).
   const depotConfig = config.depotMonitor || {};
   const trucks = [...new Set(incidentsTruckIds(section.trucks || []))];
   if (!trucks.length) {
     throw new Error("incidentsDrivers.trucks must contain at least one truck number");
   }
 
-  const pollIntervalMs = section.pollIntervalMs ?? depotConfig.pollIntervalMs ?? 60000;
+  const pollIntervalMs = section.pollIntervalMs ?? 60000;
   const monitor = {
-    ...depotConfig,
-    ...section,
-    workUrl: section.workUrl || depotConfig.workUrl,
-    selectors: section.selectors || depotConfig.selectors,
+    workUrl:
+      section.workUrl ||
+      depotConfig.workUrl ||
+      "https://live-wf.webfleet.com/web/map",
+    searchDelayMs: section.searchDelayMs ?? depotConfig.searchDelayMs ?? 1500,
+    resultDelayMs: section.resultDelayMs ?? depotConfig.resultDelayMs ?? 1000,
+    selectors: section.selectors || depotConfig.selectors || {},
+  };
+  const areaConfig = {
+    targetArea: depotConfig.targetArea,
+    targetAreas: depotConfig.targetAreas,
   };
   const state = new Map();
   const alerts = [];
@@ -71,7 +80,7 @@ export async function runIncidentsMonitor(config) {
           monitor
         );
         const locationText = observation.locationText || "";
-        const zone = classifyLocation(locationText, depotConfig);
+        const zone = classifyLocation(locationText, areaConfig);
         const previous = state.get(truckNumber) || null;
 
         const current = {

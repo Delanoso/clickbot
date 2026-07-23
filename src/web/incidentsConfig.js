@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { normalizeTruckId, listDepotTrucks } from "./depotConfig.js";
+import { normalizeTruckId } from "./depotConfig.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DEFAULT_CONFIG = "config/local.json";
@@ -114,37 +114,8 @@ export function readIncidentsConfig(configPath = DEFAULT_CONFIG) {
   }
   const config = loadJson(path);
   const section = config.incidentsDrivers || {};
-  let trucks = normalizeIncidentsTruckEntries(section.trucks || []);
-
-  // Seed once from depot watch list so the page is useful out of the box.
-  if (!trucks.length) {
-    trucks = withConfigLock(configPath, () => {
-      const latest = loadJson(path);
-      const existing = normalizeIncidentsTruckEntries(
-        (latest.incidentsDrivers || {}).trucks || []
-      );
-      if (existing.length) return existing;
-
-      const depotTrucks = listDepotTrucks(configPath);
-      if (!depotTrucks.length) return [];
-
-      const seeded = depotTrucks.map((t) => ({
-        id: t.id,
-        driver: t.driver || "",
-        comment: "",
-      }));
-      latest.incidentsDrivers = {
-        ...(latest.incidentsDrivers || {}),
-        trucks: seeded,
-        pollIntervalMs:
-          (latest.incidentsDrivers || {}).pollIntervalMs ??
-          latest.depotMonitor?.pollIntervalMs ??
-          60000,
-      };
-      saveJson(path, latest);
-      return seeded;
-    });
-  }
+  // Fully separate from depotMonitor.trucks — never seed or sync from depot.
+  const trucks = normalizeIncidentsTruckEntries(section.trucks || []);
 
   return {
     path,
