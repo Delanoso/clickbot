@@ -28,6 +28,8 @@ const exportBtn = document.getElementById("exportBtn");
 let refreshGeneration = 0;
 const removingTrucks = new Set();
 const commentTimers = new Map();
+/** In-progress comment text keyed by truck id — survives poll refreshes. */
+const pendingComments = new Map();
 let latestConfiguredTrucks = [];
 let latestLiveRows = [];
 let latestIncidents = null;
@@ -35,7 +37,7 @@ let latestIncidents = null;
 startBtn.addEventListener("click", () => controlTask("start"));
 stopBtn.addEventListener("click", () => controlTask("stop"));
 
-exportBtn.addEventListener("click", (event) => {
+exportBtn.addEventListener("click", () => {
   // Keep default navigation to download endpoint; refresh timestamp in filename via cache-buster.
   exportBtn.href = `/api/incidents/export?t=${Date.now()}`;
 });
@@ -52,6 +54,7 @@ watchList.addEventListener("input", (event) => {
   if (!field || !watchList.contains(field)) return;
   const truck = field.getAttribute("data-comment");
   const value = field.value;
+  pendingComments.set(truck, value);
   const existing = latestConfiguredTrucks.find((t) => t.id === truck);
   if (existing) existing.comment = value;
 
@@ -60,7 +63,7 @@ watchList.addEventListener("input", (event) => {
     truck,
     setTimeout(() => {
       void saveComment(truck, value);
-    }, 500)
+    }, 700)
   );
 });
 
@@ -68,6 +71,7 @@ watchList.addEventListener("change", (event) => {
   const field = event.target.closest("[data-comment]");
   if (!field || !watchList.contains(field)) return;
   const truck = field.getAttribute("data-comment");
+  pendingComments.set(truck, field.value);
   if (commentTimers.has(truck)) {
     clearTimeout(commentTimers.get(truck));
     commentTimers.delete(truck);
@@ -75,14 +79,26 @@ watchList.addEventListener("change", (event) => {
   void saveComment(truck, field.value);
 });
 
+watchList.addEventListener("blur", (event) => {
+  const field = event.target.closest?.("[data-comment]");
+  if (!field || !watchList.contains(field)) return;
+  const truck = field.getAttribute("data-comment");
+  pendingComments.set(truck, field.value);
+  if (commentTimers.has(truck)) {
+    clearTimeout(commentTimers.get(truck));
+    commentTimers.delete(truck);
+  }
+  void saveComment(truck, field.value);
+}, true);
+
 watchSearchInput.addEventListener("input", () => {
-  renderFromCache();
+  renderFromCache({ forceWatchList: true });
 });
 
 watchSearchClear.addEventListener("click", () => {
   watchSearchInput.value = "";
   watchSearchInput.focus();
-  renderFromCache();
+  renderFromCache({ forceWatchList: true });
 });
 
 addTruckForm.addEventListener("submit", async (event) => {
@@ -127,19 +143,57 @@ addTruckForm.addEventListener("submit", async (event) => {
 });
 
 async function saveComment(truck, comment) {
+  const text = String(comment || "");
+  pendingComments.set(truck, text);
   try {
     const res = await fetch(`/api/incidents/trucks/${encodeURIComponent(truck)}/comment`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ comment: String(comment || "") }),
+      body: JSON.stringify({ comment: text }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || `Could not save comment (${res.status})`);
+    const saved = data.comment || "";
     const entry = latestConfiguredTrucks.find((t) => t.id === truck);
-    if (entry) entry.comment = data.comment || "";
+    // Only clear pending if the user has not typed more since this save started.
+    if (pendingComments.get(truck) === text) {
+      pendingComments.set(truck, saved);
+      // Drop pending once server matches what we last typed for this save.
+      if (pendingComments.get(truck) === saved) {
+        // Keep map entry until next poll confirms — still prefer pending while focused.
+      }
+    }
+    if (entry && pendingComments.get(truck) === text) {
+      entry.comment = saved;
+    }
   } catch (error) {
     truckFormNote.textContent = error.message || String(error);
   }
+}
+
+function focusedCommentTruck() {
+  const active = document.activeElement;
+  if (!active || !watchList.contains(active)) return null;
+  if (!active.matches?.("[data-comment]")) return null;
+  return active.getAttribute("data-comment");
+}
+
+function mergePendingComments(trucks) {
+  return (trucks || []).map((truck) => {
+    const pending = pendingComments.get(truck.id);
+    if (pending == null) return truck;
+    return { ...truck, comment: pending };
+  });
+}
+
+function syncPendingFromDom() {
+  watchList.querySelectorAll("[data-comment]").forEach((field) => {
+    const truck = field.getAttribute("data-comment");
+    if (!truck) return;
+    if (document.activeElement === field || pendingComments.has(truck)) {
+      pendingComments.set(truck, field.value);
+    }
+  });
 }
 
 async function removeTruck(truck) {
@@ -151,7 +205,8 @@ async function removeTruck(truck) {
 
   refreshGeneration += 1;
   latestConfiguredTrucks = latestConfiguredTrucks.filter((t) => t.id !== key);
-  renderFromCache();
+  pendingComments.delete(key);
+  renderFromCache({ forceWatchList: true });
   truckFormNote.textContent = `Removing ${key}…`;
 
   try {
@@ -336,7 +391,15 @@ function renderLive(incidents, configuredTrucks) {
   }
 }
 
-function renderWatchList(configuredTrucks, liveRows) {
+function renderWatchList(configuredTrucks, liveRows, { force = false } = {}) {
+  // Never rebuild comment inputs while the user is typing — that steals focus
+  // and wipes the text mid-keystroke when the 4s poll refreshes the page.
+  const focusedTruck = focusedCommentTruck();
+  if (focusedTruck && !force) {
+    truckCount.textContent = `${configuredTrucks.length} truck${configuredTrucks.length === 1 ? "" : "s"}`;
+    return;
+  }
+
   const query = watchSearchInput.value.trim().toLowerCase();
   const liveById = new Map(
     (liveRows || []).map((row) => [String(row.truckNumber || "").toUpperCase(), row])
@@ -377,6 +440,8 @@ function renderWatchList(configuredTrucks, liveRows) {
       } else if (!entry.driver) {
         metaParts.push("Driver lookup pending / not found");
       }
+      const commentValue =
+        pendingComments.has(entry.id) ? pendingComments.get(entry.id) : entry.comment || "";
       return `<div class="watch-row watch-row-incidents ${cls}">
         <div class="watch-main">
           <strong>${escapeHtml(entry.id)}</strong>
@@ -387,7 +452,7 @@ function renderWatchList(configuredTrucks, liveRows) {
             class="comment-input"
             type="text"
             data-comment="${escapeHtml(entry.id)}"
-            value="${escapeHtml(entry.comment || "")}"
+            value="${escapeHtml(commentValue)}"
             placeholder="Add a note next to this driver…"
             autocomplete="off"
           />
@@ -398,9 +463,9 @@ function renderWatchList(configuredTrucks, liveRows) {
     .join("");
 }
 
-function renderFromCache() {
+function renderFromCache({ forceWatchList = false } = {}) {
   renderLive(latestIncidents, latestConfiguredTrucks);
-  renderWatchList(latestConfiguredTrucks, latestLiveRows);
+  renderWatchList(latestConfiguredTrucks, latestLiveRows, { force: forceWatchList });
 }
 
 async function refreshLogs() {
@@ -416,6 +481,8 @@ async function refreshLogs() {
 
 async function refresh({ force = false } = {}) {
   const gen = force ? ++refreshGeneration : refreshGeneration;
+  syncPendingFromDom();
+
   const [healthRes, incidentsRes] = await Promise.all([
     fetch("/api/health"),
     fetch("/api/incidents"),
@@ -429,17 +496,31 @@ async function refresh({ force = false } = {}) {
   hostLine.textContent = `http://${ip}${location.port ? `:${location.port}` : ""}/incidents-drivers`;
   clockLine.textContent = new Date().toLocaleString();
 
-  latestConfiguredTrucks = payload.trucks || [];
+  // Keep any in-progress comment text over the server copy.
+  latestConfiguredTrucks = mergePendingComments(payload.trucks || []);
   latestIncidents = payload.incidents || null;
   latestLiveRows = payload.incidents?.trucks || [];
+
+  // Drop pending entries that now match the server and are not focused.
+  const focused = focusedCommentTruck();
+  for (const truck of latestConfiguredTrucks) {
+    if (!pendingComments.has(truck.id)) continue;
+    if (truck.id === focused) continue;
+    if (pendingComments.get(truck.id) === (truck.comment || "")) {
+      pendingComments.delete(truck.id);
+    }
+  }
 
   if (payload.johannesburg) {
     coverageNote.textContent = `Latest monitor lines · CoJ coverage: ${payload.johannesburg.suburbCount} suburbs, ${payload.johannesburg.postalCodeCount} postal codes.`;
   }
 
   renderTask(payload.task);
-  renderFromCache();
-  await refreshLogs();
+  // Force watch-list rebuild only for explicit user actions (add/remove), never while typing.
+  renderFromCache({ forceWatchList: force && !focusedCommentTruck() });
+  if (!focusedCommentTruck()) {
+    await refreshLogs();
+  }
 }
 
 setInterval(() => {
