@@ -156,25 +156,33 @@ export async function coachOneSession(page, selectors = {}) {
 /**
  * Play clips until Complete Session appears.
  *
- * - Multiple videos: click each carousel thumbnail/image, wait 2s, next
- * - Single video: scroll down a bit and click the actual Play button
+ * Lytx only unlocks Complete Session after each event clip has actually
+ * played (viewed). Clicking a thumbnail alone is not enough.
+ *
+ * - Multiple videos: select thumbnail 1..N, press Play, wait ≥2s each
+ * - Single video: scroll to player and press Play
  */
 async function playAllEventVideosUntilReady(page, selectors = {}) {
   const thumbWaitMs = Number(selectors.thumbWaitMs || 2000);
   const minPlayMs = Number(selectors.minPlayMs || 1100);
-  const maxPasses = Number(selectors.maxPlayPasses || 3);
+  const maxPasses = Number(selectors.maxPlayPasses || 4);
   let totalPlays = 0;
 
   for (let pass = 1; pass <= maxPasses; pass += 1) {
-    await scrollToEventVideosHeading(page);
+    await scrollToEventPlayer(page);
     const eventCount = (await readEventVideoCount(page)) || 1;
     console.log(`[coaching] Play pass ${pass}/${maxPasses} — ${eventCount} event(s)`);
 
     if (eventCount <= 1) {
-      await playSingleEventWithPlayButton(page, { minPlayMs });
-      totalPlays += 1;
+      totalPlays += await playCurrentVideo(page, {
+        minPlayMs: Math.max(minPlayMs, thumbWaitMs),
+        forceScroll: true,
+      });
     } else {
-      totalPlays += await playMultipleEventThumbnails(page, eventCount, { thumbWaitMs });
+      totalPlays += await playMultipleEventVideos(page, eventCount, {
+        thumbWaitMs,
+        minPlayMs,
+      });
     }
 
     const ready = await sessionReadyToComplete(page);
@@ -202,7 +210,15 @@ async function sessionReadyToComplete(page, { timeoutMs = 8000 } = {}) {
       .first()
       .isVisible()
       .catch(() => false);
-    if (completeVisible) return "complete-session-visible";
+    if (completeVisible) {
+      const disabled = await page
+        .locator("button, a, [role='button']")
+        .filter({ hasText: /Complete Session/i })
+        .first()
+        .isDisabled()
+        .catch(() => false);
+      if (!disabled) return "complete-session-visible";
+    }
 
     const zeroBehaviors = await page
       .getByText(/0 Behaviors Left to Coach/i)
@@ -211,7 +227,7 @@ async function sessionReadyToComplete(page, { timeoutMs = 8000 } = {}) {
       .catch(() => false);
     if (zeroBehaviors) return "zero-behaviors";
 
-    await scrollToEventVideosHeading(page);
+    await scrollToEventPlayer(page);
     await sleep(400);
   }
   return null;
@@ -225,170 +241,377 @@ async function scrollToEventVideosHeading(page) {
   await sleep(300);
 }
 
+async function scrollToEventPlayer(page) {
+  await scrollToEventVideosHeading(page);
+  await page
+    .evaluate(() => {
+      const video = document.querySelector("video");
+      if (video) {
+        video.scrollIntoView({ block: "center", behavior: "instant" });
+        return;
+      }
+      const label = [...document.querySelectorAll("h1,h2,h3,h4,div,span,p")].find((el) =>
+        /Event Videos?/i.test((el.textContent || "").trim())
+      );
+      label?.scrollIntoView({ block: "start", behavior: "instant" });
+    })
+    .catch(() => {});
+  await sleep(400);
+}
+
 async function readEventVideoCount(page) {
   const fromText = await page.evaluate(() => {
     const body = document.body?.innerText || "";
     const labeled = body.match(/Event Videos?\s*:\s*(\d+)/i);
     if (labeled) return Number(labeled[1]);
-    const ofMatch = body.match(/EVENTS?\s+\d+\s*[-–]\s*\d+\s+OF\s+(\d+)/i);
-    if (ofMatch) return Number(ofMatch[1]);
+    const ofMatch = body.match(/EVENTS?\s+(\d+)\s*[-–]\s*(\d+)\s+OF\s+(\d+)/i);
+    if (ofMatch) return Number(ofMatch[3]);
+    const short = body.match(/EVENTS?\s+\d+\s+OF\s+(\d+)/i);
+    if (short) return Number(short[1]);
     return null;
   });
   if (fromText && fromText > 0) return fromText;
 
   const tagged = await tagEventThumbnails(page);
-  return tagged;
+  return tagged > 0 ? tagged : 1;
 }
 
-async function tagEventThumbnails(page) {
-  return page.evaluate(() => {
-    // Clear previous tags.
+/**
+ * Tag a left-to-right row of similar-sized event carousel thumbnails
+ * under the Event Videos heading. Avoids logos/avatars by clustering.
+ */
+async function tagEventThumbnails(page, expectedCount = 0) {
+  return page.evaluate((expected) => {
     document.querySelectorAll("[data-coach-thumb]").forEach((el) => {
       el.removeAttribute("data-coach-thumb");
     });
 
-    const heading = [...document.querySelectorAll("h1,h2,h3,h4,div,span,p")].find((el) =>
-      /Event Videos?\s*:/i.test((el.textContent || "").trim()) ||
-      /^Event Videos?/i.test((el.textContent || "").trim())
-    );
+    const heading = [...document.querySelectorAll("h1,h2,h3,h4,div,span,p,label")].find((el) => {
+      const t = (el.textContent || "").replace(/\s+/g, " ").trim();
+      return /^Event Videos?\s*:?/i.test(t) || /Event Videos?\s*:\s*\d+/i.test(t);
+    });
 
-    const roots = [];
+    let searchRoot = document.body;
     if (heading) {
       let root = heading.parentElement;
-      for (let depth = 0; depth < 8 && root; depth += 1) {
-        roots.push(root);
+      for (let depth = 0; depth < 6 && root; depth += 1) {
+        const imgs = root.querySelectorAll("img");
+        if (imgs.length >= Math.max(expected || 1, 2) || imgs.length >= 2) {
+          searchRoot = root;
+          break;
+        }
+        searchRoot = root;
         root = root.parentElement;
       }
-    } else {
-      roots.push(document.body);
+    }
+
+    const visible = (el) => {
+      const r = el.getBoundingClientRect();
+      const style = window.getComputedStyle(el);
+      return (
+        r.width >= 48 &&
+        r.height >= 32 &&
+        r.bottom > 0 &&
+        r.top < window.innerHeight + 200 &&
+        style.visibility !== "hidden" &&
+        style.display !== "none" &&
+        Number(style.opacity || "1") > 0.05
+      );
+    };
+
+    const imgs = [...searchRoot.querySelectorAll("img")].filter(visible);
+    if (!imgs.length) return 0;
+
+    // Build horizontal clusters of similarly-sized images (carousel row).
+    const items = imgs.map((img) => {
+      const r = img.getBoundingClientRect();
+      const clickable =
+        img.closest("button, a, [role='button'], [tabindex], mat-card, .card") ||
+        img.parentElement ||
+        img;
+      return { img, clickable, r, midY: r.top + r.height / 2, h: r.height, w: r.width };
+    });
+
+    const clusters = [];
+    for (const item of items) {
+      let placed = false;
+      for (const cluster of clusters) {
+        const ref = cluster[0];
+        const sameRow = Math.abs(item.midY - ref.midY) < Math.max(24, ref.h * 0.45);
+        const similarSize =
+          Math.abs(item.h - ref.h) < Math.max(18, ref.h * 0.35) &&
+          Math.abs(item.w - ref.w) < Math.max(40, ref.w * 0.55);
+        if (sameRow && similarSize) {
+          cluster.push(item);
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) clusters.push([item]);
+    }
+
+    // Prefer a cluster whose size matches Event Videos:N, else largest plausible row.
+    clusters.sort((a, b) => b.length - a.length);
+    let best = clusters[0] || [];
+    if (expected > 0) {
+      const exact = clusters.find((c) => c.length === expected);
+      const near = clusters.find((c) => c.length >= expected && c.length <= expected + 2);
+      best = exact || near || best;
+    }
+    // Drop huge clusters (page chrome) and tiny ones.
+    if (best.length > 12) {
+      best = clusters.find((c) => c.length >= 2 && c.length <= 12) || best.slice(0, expected || 3);
     }
 
     const seen = new Set();
-    const clickables = [];
-    for (const root of roots) {
-      const imgs = [...root.querySelectorAll("img")];
-      for (const img of imgs) {
-        const r = img.getBoundingClientRect();
-        if (r.width < 50 || r.height < 35) continue;
-        const clickable =
-          img.closest("button, a, [role='button'], [tabindex]") || img.parentElement || img;
-        if (!clickable || seen.has(clickable)) continue;
-        seen.add(clickable);
-        clickables.push(clickable);
-      }
-      if (clickables.length >= 1) break;
-    }
+    const ordered = best
+      .sort((a, b) => a.r.left - b.r.left)
+      .map((item) => item.clickable)
+      .filter((el) => {
+        if (!el || seen.has(el)) return false;
+        seen.add(el);
+        return true;
+      });
 
-    clickables.forEach((el, index) => {
+    const limited =
+      expected > 0 && ordered.length > expected ? ordered.slice(0, expected) : ordered;
+
+    limited.forEach((el, index) => {
       el.setAttribute("data-coach-thumb", String(index));
     });
-    return clickables.length;
-  });
+    return limited.length;
+  }, expectedCount || 0);
 }
 
 /**
- * Multi-video: click EVERY thumbnail in order — 1, 2, 3, … — wait 2s between each.
- * Event 1 must always be clicked too (even if already selected).
+ * Multi-video: for each event 1..N select the thumbnail, then Play the clip.
  */
-async function playMultipleEventThumbnails(page, eventCount, { thumbWaitMs = 2000 } = {}) {
-  await scrollToEventVideosHeading(page);
-  let tagged = await tagEventThumbnails(page);
+async function playMultipleEventVideos(
+  page,
+  eventCount,
+  { thumbWaitMs = 2000, minPlayMs = 1100 } = {}
+) {
+  await scrollToEventPlayer(page);
+  const tagged = await tagEventThumbnails(page, eventCount);
   console.log(
-    `[coaching] Will click events 1..${eventCount} (${tagged} thumbnail(s) tagged)`
+    `[coaching] Will play events 1..${eventCount} (${tagged} thumbnail(s) tagged)`
   );
 
   let played = 0;
   for (let i = 0; i < eventCount; i += 1) {
-    // Keep carousel advanced so later thumbs stay findable.
-    if (i > 0 && i >= tagged) {
-      const nextArrow = page
-        .locator("button[aria-label*='next' i], button[aria-label*='Next' i]")
-        .first();
-      if (await nextArrow.isVisible().catch(() => false)) {
-        await clickStable(nextArrow);
-        await sleep(400);
-        tagged = await tagEventThumbnails(page);
-      }
-    }
-
-    const byAttr = page.locator(`[data-coach-thumb="${i}"]`).first();
-    const byNth = page.locator("[data-coach-thumb]").nth(i);
-    let tile = null;
-    if (await byAttr.count()) tile = byAttr;
-    else if ((await page.locator("[data-coach-thumb]").count()) > i) tile = byNth;
-
-    if (!tile) {
-      // Last resort: retag and take nth image under Event Videos.
-      tagged = await tagEventThumbnails(page);
-      tile = page.locator("[data-coach-thumb]").nth(Math.min(i, Math.max(tagged - 1, 0)));
-    }
-
-    if (await tile.count()) {
-      await tile.scrollIntoViewIfNeeded().catch(() => {});
-      await clickStable(tile);
-      console.log(`[coaching] Clicked event ${i + 1}/${eventCount}`);
-    } else {
-      console.log(`[coaching] MISSED event ${i + 1}/${eventCount} — no thumbnail to click`);
-    }
-
-    await sleep(thumbWaitMs);
-    played += 1;
+    const selected = await selectEventThumbnail(page, i, eventCount);
+    console.log(
+      selected
+        ? `[coaching] Selected event ${i + 1}/${eventCount} via ${selected}`
+        : `[coaching] Could not select event ${i + 1}/${eventCount} — playing current`
+    );
+    await sleep(350);
+    played += await playCurrentVideo(page, {
+      minPlayMs: Math.max(minPlayMs, thumbWaitMs),
+      forceScroll: true,
+    });
+    console.log(`[coaching] Played event ${i + 1}/${eventCount}`);
   }
   return played;
 }
 
-/**
- * Single video: scroll down a bit and click the actual Play button.
- */
-async function playSingleEventWithPlayButton(page, { minPlayMs = 1100 } = {}) {
+async function selectEventThumbnail(page, index, eventCount) {
   await scrollToEventVideosHeading(page);
-  await page.evaluate(() => window.scrollBy(0, 320)).catch(() => {});
-  await sleep(400);
+  let tagged = await tagEventThumbnails(page, eventCount);
 
-  const play = page
+  // If later thumbs are off-screen in a carousel, nudge with Next.
+  if (index > 0 && tagged > 0 && index >= tagged) {
+    for (let nudge = 0; nudge < index - tagged + 2; nudge += 1) {
+      const moved = await clickCarouselNext(page);
+      if (!moved) break;
+      await sleep(350);
+      tagged = await tagEventThumbnails(page, eventCount);
+      if (index < tagged) break;
+    }
+  }
+
+  const tile = page.locator(`[data-coach-thumb="${index}"]`).first();
+  if (await tile.count()) {
+    await tile.scrollIntoViewIfNeeded().catch(() => {});
+    await clickStable(tile);
+    return `thumb-${index}`;
+  }
+
+  // Fallback: click Nth tagged thumb if indexes shifted.
+  const all = page.locator("[data-coach-thumb]");
+  const count = await all.count();
+  if (count > 0 && index < count) {
+    await clickStable(all.nth(index));
+    return `thumb-nth-${index}`;
+  }
+
+  if (index > 0) {
+    const moved = await clickCarouselNext(page);
+    if (moved) return "carousel-next";
+  }
+  return null;
+}
+
+async function clickCarouselNext(page) {
+  const nextArrow = page
+    .locator(
+      [
+        "button[aria-label*='next' i]",
+        "button[aria-label*='Next' i]",
+        "button[aria-label*='forward' i]",
+        "[class*='carousel'] button[aria-label*='next' i]",
+      ].join(", ")
+    )
+    .or(page.getByRole("button", { name: /^Next$/i }))
+    .first();
+  if (await nextArrow.isVisible().catch(() => false)) {
+    await clickStable(nextArrow);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Press Play on the current event video and wait so Lytx marks it viewed.
+ */
+async function playCurrentVideo(page, { minPlayMs = 1100, forceScroll = false } = {}) {
+  if (forceScroll) await scrollToEventPlayer(page);
+
+  const video = page.locator("video").first();
+  if (await video.isVisible().catch(() => false)) {
+    await video.hover().catch(() => {});
+    await sleep(200);
+  }
+
+  const clicked = await clickPlayControl(page);
+  if (clicked) {
+    console.log(`[coaching] Play clicked (${clicked})`);
+  } else if (await video.isVisible().catch(() => false)) {
+    await video.click({ force: true }).catch(() => {});
+    await page
+      .evaluate(() => {
+        const v = document.querySelector("video");
+        if (!v) return;
+        v.muted = true;
+        const p = v.play?.();
+        if (p && typeof p.catch === "function") p.catch(() => {});
+      })
+      .catch(() => {});
+    console.log("[coaching] Play via video element / media.play()");
+  } else {
+    await page.keyboard.press("Space").catch(() => {});
+    console.log("[coaching] Play via Space (no video node found)");
+  }
+
+  await sleep(minPlayMs);
+
+  // If still paused, one more attempt.
+  const paused = await page
+    .evaluate(() => {
+      const v = document.querySelector("video");
+      return v ? v.paused : null;
+    })
+    .catch(() => null);
+  if (paused === true) {
+    await clickPlayControl(page);
+    await page
+      .evaluate(() => {
+        const v = document.querySelector("video");
+        if (!v) return;
+        v.muted = true;
+        const p = v.play?.();
+        if (p && typeof p.catch === "function") p.catch(() => {});
+      })
+      .catch(() => {});
+    await sleep(minPlayMs);
+  }
+  return 1;
+}
+
+async function clickPlayControl(page) {
+  const named = page
     .getByRole("button", { name: /^(Play|Play video|Play clip)$/i })
     .or(page.locator("button[aria-label*='Play' i], [aria-label='Play'], [title='Play']"))
-    .or(page.locator("button.vjs-play-control, .vjs-big-play-button, button[class*='play' i]"))
     .first();
-
-  if (await play.isVisible().catch(() => false)) {
-    await play.scrollIntoViewIfNeeded().catch(() => {});
-    await clickStable(play, { forceAfterMs: 2000 });
-    console.log("[coaching] Clicked Play button (single video)");
-  } else {
-    // Fallback: center control near video via DOM.
-    const clicked = await page.evaluate(() => {
-      const video = document.querySelector("video");
-      if (video) {
-        video.scrollIntoView({ block: "center" });
-        video.muted = true;
-      }
-      const btn = [...document.querySelectorAll("button, [role='button'], div, span")].find(
-        (el) => {
-          const aria = `${el.getAttribute("aria-label") || ""} ${el.getAttribute("title") || ""}`.toLowerCase();
-          const cls = String(el.className || "").toLowerCase();
-          return /play/.test(aria) || /play/.test(cls);
-        }
-      );
-      if (btn) {
-        btn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
-        return true;
-      }
-      if (video) {
-        video.click();
-        const p = video.play?.();
-        if (p && typeof p.catch === "function") p.catch(() => {});
-        return true;
-      }
-      return false;
-    });
-    console.log(
-      clicked
-        ? "[coaching] Clicked Play via DOM/video (single video)"
-        : "[coaching] Play button not found (single video)"
-    );
+  if (await named.isVisible().catch(() => false)) {
+    await clickStable(named, { forceAfterMs: 1500 });
+    return "named";
   }
-  await sleep(minPlayMs);
+
+  const classic = page
+    .locator(
+      [
+        "button.vjs-big-play-button",
+        ".vjs-big-play-button",
+        "button.vjs-play-control",
+        ".vjs-play-control.vjs-paused",
+        "button[class*='play' i]",
+        "[class*='PlayButton' i]",
+        "[data-test-id*='play' i]",
+      ].join(", ")
+    )
+    .first();
+  if (await classic.isVisible().catch(() => false)) {
+    await clickStable(classic, { forceAfterMs: 1500 });
+    return "classic";
+  }
+
+  const viaDom = await page.evaluate(() => {
+    const visible = (el) => {
+      const r = el.getBoundingClientRect();
+      const style = window.getComputedStyle(el);
+      return (
+        r.width > 10 &&
+        r.height > 10 &&
+        style.visibility !== "hidden" &&
+        style.display !== "none" &&
+        Number(style.opacity || "1") > 0.05
+      );
+    };
+
+    const video = document.querySelector("video");
+    const videoRect = video?.getBoundingClientRect();
+    const candidates = [...document.querySelectorAll("button, [role='button'], div, span")];
+
+    let best = null;
+    let bestScore = -1;
+    for (const el of candidates) {
+      if (!visible(el)) continue;
+      const aria = `${el.getAttribute("aria-label") || ""} ${el.getAttribute("title") || ""}`.toLowerCase();
+      const cls = String(el.className || "").toLowerCase();
+      const text = (el.textContent || "").trim().toLowerCase();
+      const looksPlay =
+        /\bplay\b/.test(aria) ||
+        /\bplay\b/.test(cls) ||
+        text === "play" ||
+        /vjs-big-play|big-play|play-control/.test(cls);
+      if (!looksPlay) continue;
+
+      const r = el.getBoundingClientRect();
+      let score = 10;
+      if (videoRect) {
+        const cx = r.left + r.width / 2;
+        const cy = r.top + r.height / 2;
+        const inside =
+          cx >= videoRect.left - 40 &&
+          cx <= videoRect.right + 40 &&
+          cy >= videoRect.top - 40 &&
+          cy <= videoRect.bottom + 40;
+        if (inside) score += 50;
+      }
+      if (/big-play|vjs-big-play/.test(cls)) score += 20;
+      if (score > bestScore) {
+        bestScore = score;
+        best = el;
+      }
+    }
+
+    if (!best) return false;
+    best.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+    return true;
+  });
+
+  return viaDom ? "dom" : null;
 }
 
 async function completeCoachingSession(page) {
@@ -407,7 +630,7 @@ async function completeCoachingSession(page) {
     if (await completeSession.isVisible().catch(() => false)) {
       if (await completeSession.isDisabled().catch(() => false)) {
         console.log("[coaching] Complete Session disabled — need another play pass");
-        await playSingleEventWithPlayButton(page, { minPlayMs: 1200 });
+        await playCurrentVideo(page, { minPlayMs: 1200, forceScroll: true });
         continue;
       }
       await completeSession.scrollIntoViewIfNeeded().catch(() => {});
@@ -420,7 +643,7 @@ async function completeCoachingSession(page) {
       throw new Error("Complete Session not visible after playing videos");
     }
     console.log("[coaching] Complete Session not visible — retry play");
-    await playSingleEventWithPlayButton(page, { minPlayMs: 1200 });
+    await playCurrentVideo(page, { minPlayMs: 1200, forceScroll: true });
   }
 
   // Modal: "Save and complete your coaching session?" → Complete

@@ -112,7 +112,9 @@
           "openTile": {
             "text": "DUE FOR COACHING"
           },
-          "minPlayMs": 1100
+          "minPlayMs": 1200,
+          "thumbWaitMs": 2000,
+          "maxPlayPasses": 4
         }
       }
     },

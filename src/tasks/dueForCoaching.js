@@ -15,7 +15,7 @@ import { writeTaskStatus } from "../utils/taskStatus.js";
  * Flow (one iteration):
  * 1. Open DUE FOR COACHING from the dashboard
  * 2. Click Coach Event / Coach N Events on the first card
- * 3. Play every event video ≥1 second (single-video sessions: scroll + Play)
+ * 3. For each event: select thumbnail → Play clip ≥2s (single-video: Play only)
  * 4. Scroll to Complete Session → Complete → Close
  * 5. Repeat until the queue is empty
  */
