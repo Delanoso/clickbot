@@ -17,6 +17,10 @@ const DEFAULT_DEPOT_AREAS = {
     "Windmill Park, Boksburg 1459, ZA",
     "Windmill Park",
     "Salfin, Boksburg",
+    "Insingizi, Boksburg, 1459, ZA",
+    "Insingizi, Boksburg 1459, ZA",
+    "Insingizi, Boksburg",
+    "Insingizi",
   ],
 };
 

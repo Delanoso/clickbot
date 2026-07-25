@@ -18,6 +18,11 @@ assert.equal(
   classifyLocation("Windmill Park, Boksburg 1459, ZA"),
   "depot"
 );
+assert.equal(
+  classifyLocation("Insingizi, Boksburg, 1459, ZA"),
+  "depot"
+);
+assert.equal(classifyLocation("Truck at Insingizi Boksburg"), "depot");
 
 assert.equal(
   classifyLocation("Sandton City, Sandton, Johannesburg 2196, ZA"),
