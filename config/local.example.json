@@ -193,6 +193,27 @@
         "resultItem": null,
         "driverNameResult": null
       }
+    },
+    "vehicles": {
+      "url": "https://dc.lytx.com/",
+      "workUrl": "https://app.lytx.com/",
+      "login": {
+        "enabled": true,
+        "manual": false,
+        "usernameEnv": "LYTX_VEHICLES_USERNAME",
+        "passwordEnv": "LYTX_VEHICLES_PASSWORD",
+        "usernameSelector": "#username",
+        "passwordSelector": "#password",
+        "submitSelector": "#submit-button",
+        "rememberMeSelector": "#remember-me-input",
+        "successUrlPattern": "app\\.lytx\\.com|dc\\.lytx\\.com|^(?!.*login\\.lytx\\.com).+",
+        "timeoutMs": 300000
+      }
     }
+  },
+  "wakeTrucks": {
+    "pageSize": 100,
+    "clickDelayMs": 1000,
+    "waitBetweenPassesMs": 300000
   }
 }
