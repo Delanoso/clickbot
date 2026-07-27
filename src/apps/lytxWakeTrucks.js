@@ -3,6 +3,7 @@
  */
 
 const VEHICLE_LIST_URLS = [
+  "https://app.lytx.com/#/lvs/vehicles",
   "https://app.lytx.com/#/video-search/vehicles",
   "https://app.lytx.com/#/video-search/vehicle-list",
   "https://app.lytx.com/#/vehicles",
@@ -200,36 +201,149 @@ export async function setVehiclesPageSize(page, pageSize = 100) {
 export async function readPagination(page) {
   return page.evaluate(() => {
     const body = document.body?.innerText || "";
-    const m = body.match(/(\d+)\s+of\s+(\d+)/i);
-    if (!m) return { current: 1, total: 1 };
-    return { current: Number(m[1]), total: Number(m[2]) };
+
+    const pageMatches = [...body.matchAll(/\b(\d+)\s+of\s+(\d+)\b/gi)];
+    for (let i = pageMatches.length - 1; i >= 0; i -= 1) {
+      const current = Number(pageMatches[i][1]);
+      const total = Number(pageMatches[i][2]);
+      if (total > 1 && total <= 50) return { current, total };
+    }
+
+    const range = body.match(/VEHICLES\s+(\d+)\s*-\s*(\d+)\s+OF\s+(\d+)/i);
+    if (range) {
+      const start = Number(range[1]);
+      const end = Number(range[2]);
+      const totalVehicles = Number(range[3]);
+      const pageSize = Math.max(end - start + 1, 1);
+      return {
+        current: Math.floor((start - 1) / pageSize) + 1,
+        total: Math.max(Math.ceil(totalVehicles / pageSize), 1),
+      };
+    }
+
+    return { current: 1, total: 1 };
   });
 }
 
+async function scrollPaginationIntoView(page) {
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await sleep(600);
+}
+
 export async function goToNextPage(page) {
+  await scrollPaginationIntoView(page);
+
+  const viaDom = await page.evaluate(() => {
+    const isDisabledControl = (el) => {
+      if (!el) return true;
+      if (el.disabled || el.getAttribute("aria-disabled") === "true") return true;
+      if (el.classList?.contains("disabled")) return true;
+      const style = window.getComputedStyle(el);
+      return style.pointerEvents === "none" || style.visibility === "hidden";
+    };
+
+    const tryClick = (el) => {
+      if (!el || isDisabledControl(el)) return false;
+      const r = el.getBoundingClientRect();
+      if (r.width < 4 || r.height < 4) return false;
+      el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+      return true;
+    };
+
+    const controls = [
+      ...document.querySelectorAll(
+        "button, a, [role='button'], [role='link'], span, i, li, div"
+      ),
+    ];
+
+    for (const el of controls) {
+      const label = `${el.getAttribute("aria-label") || ""} ${el.getAttribute("title") || ""} ${
+        el.className || ""
+      }`.toLowerCase();
+      const text = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
+      if (label.includes("next page") || label === "next" || /^next$/i.test(text)) {
+        if (tryClick(el)) return "label-next";
+      }
+      if (text === ">" || text === "›" || text === "»") {
+        if (tryClick(el)) return "chevron-next";
+      }
+    }
+
+    const pagers = document.querySelectorAll(
+      "[class*='pag'], [class*='Pager'], .pagination, [class*='pagination']"
+    );
+    for (const pager of pagers) {
+      const btns = pager.querySelectorAll("button, a, [role='button'], span, i");
+      for (const btn of btns) {
+        const cls = (btn.className || "").toLowerCase();
+        const text = (btn.innerText || btn.textContent || "").trim();
+        if (cls.includes("next") || cls.includes("right") || text === ">" || text === "›") {
+          if (tryClick(btn)) return "pager-next";
+        }
+      }
+    }
+
+    return null;
+  });
+
+  if (viaDom) {
+    console.log(`[wake] Advanced to next page (${viaDom})`);
+    await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+    await sleep(1500);
+    return true;
+  }
+
   const next = page
     .locator("button, a, [role='button']")
     .filter({ hasText: /^>$/ })
     .or(page.locator("button[aria-label*='next' i], a[aria-label*='next' i]"))
     .last();
-  if (!(await next.isVisible().catch(() => false))) return false;
-  const disabled = await next.isDisabled().catch(() => false);
-  if (disabled) return false;
+  if (!(await next.isVisible().catch(() => false))) {
+    console.log("[wake] Could not find next-page control");
+    return false;
+  }
+  if (await next.isDisabled().catch(() => false)) return false;
   await clickStable(next);
   await sleep(1500);
   return true;
 }
 
 export async function goToFirstPage(page) {
-  for (let i = 0; i < 50; i += 1) {
-    const prev = page
-      .locator("button, a, [role='button']")
-      .filter({ hasText: /^<$/ })
-      .or(page.locator("button[aria-label*='prev' i], a[aria-label*='prev' i]"))
-      .first();
-    if (!(await prev.isVisible().catch(() => false))) break;
-    if (await prev.isDisabled().catch(() => false)) break;
-    await clickStable(prev);
+  await scrollPaginationIntoView(page);
+
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const viaDom = await page.evaluate(() => {
+      const isDisabledControl = (el) => {
+        if (!el) return true;
+        if (el.disabled || el.getAttribute("aria-disabled") === "true") return true;
+        if (el.classList?.contains("disabled")) return true;
+        const style = window.getComputedStyle(el);
+        return style.pointerEvents === "none" || style.visibility === "hidden";
+      };
+
+      const tryClick = (el) => {
+        if (!el || isDisabledControl(el)) return false;
+        const r = el.getBoundingClientRect();
+        if (r.width < 4 || r.height < 4) return false;
+        el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+        return true;
+      };
+
+      for (const el of document.querySelectorAll("button, a, [role='button'], span, i")) {
+        const label = `${el.getAttribute("aria-label") || ""} ${el.getAttribute("title") || ""}`.toLowerCase();
+        const text = (el.innerText || el.textContent || "").trim();
+        if (label.includes("first") || label.includes("previous page") || text === "«" || text === "‹") {
+          if (tryClick(el)) return true;
+        }
+        if (text === "<") {
+          const pagers = el.closest("[class*='pag'], [class*='Pager'], .pagination");
+          if (pagers && tryClick(el)) return true;
+        }
+      }
+      return false;
+    });
+
+    if (!viaDom) break;
     await sleep(800);
   }
 }

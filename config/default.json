@@ -130,7 +130,7 @@
     "vehicles": {
       "url": "https://dc.lytx.com/",
       "workUrl": "https://app.lytx.com/",
-      "vehiclesListUrl": "https://app.lytx.com/#/video-search/vehicles",
+      "vehiclesListUrl": "https://app.lytx.com/#/lvs/vehicles",
       "login": {
         "enabled": true,
         "manual": false,
