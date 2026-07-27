@@ -701,3 +701,26 @@ main {
 .danger-btn:hover {
   border-color: var(--danger);
 }
+
+.wake-stage-stats {
+  margin: 0 0 1.25rem;
+}
+
+.wake-truck-list {
+  min-height: 6rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.section-subhead {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  margin: 1rem 0 0.75rem;
+}
+
+.section-subhead h3 {
+  margin: 0;
+  font-size: 1rem;
+}

@@ -19,11 +19,12 @@
         <a class="nav-link active" href="/">Home</a>
         <a class="nav-link" href="/depot">Depot Monitor</a>
         <a class="nav-link" href="/incidents-drivers">Incidents and Drivers</a>
+        <a class="nav-link" href="/wake-trucks">Wake Trucks</a>
       </nav>
       <p class="eyebrow">Personal ops console</p>
       <h1 class="brand">clickbot</h1>
       <p class="lede">
-        Run allocate, FYI, and coaching from here. Depot watch lives on its own page.
+        Run allocate, FYI, and coaching from here. Depot, incidents, and wake trucks have their own pages.
       </p>
       <div class="hero-meta">
         <span id="hostLine">Starting…</span>
@@ -83,21 +84,20 @@
           </div>
         </article>
 
-        <article class="task-panel" data-task="wake-trucks">
+        <article class="task-panel task-panel-link">
           <div class="task-head">
             <h2>Wake Trucks</h2>
-            <span class="status-dot" data-role="dot"></span>
+            <span class="status-dot" id="wakeDot"></span>
           </div>
           <p class="task-copy">
-            Lytx Video Search → Vehicles. One pass — Wake/Retry every page, then a run summary in the logs.
+            Stage 1 wake pass and Stage 2 on a dedicated page.
           </p>
           <dl class="task-stats">
-            <div><dt>State</dt><dd data-role="state">idle</dd></div>
-            <div><dt>Result</dt><dd data-role="detail">—</dd></div>
+            <div><dt>State</dt><dd id="wakeState">idle</dd></div>
+            <div><dt>Woken</dt><dd id="wakeDetail">—</dd></div>
           </dl>
           <div class="task-actions">
-            <button type="button" class="btn primary" data-action="start">Start</button>
-            <button type="button" class="btn" data-action="stop">Stop</button>
+            <a class="btn primary" href="/wake-trucks">Open Wake Trucks</a>
           </div>
         </article>
 
@@ -131,6 +131,6 @@
       </section>
     </main>
 
-    <script type="module" src="/app.js?v=20260727a"></script>
+    <script type="module" src="/app.js?v=20260727b"></script>
   </body>
 </html>

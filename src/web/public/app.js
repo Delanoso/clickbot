@@ -5,6 +5,9 @@ const logView = document.getElementById("logView");
 const depotDot = document.getElementById("depotDot");
 const depotState = document.getElementById("depotState");
 const depotDetail = document.getElementById("depotDetail");
+const wakeDot = document.getElementById("wakeDot");
+const wakeState = document.getElementById("wakeState");
+const wakeDetail = document.getElementById("wakeDetail");
 
 let selectedLogTask = "allocate-drivers";
 
@@ -52,6 +55,22 @@ function renderTasks(tasks) {
       continue;
     }
 
+    if (task.id === "wake-trucks") {
+      const state = task.running
+        ? "running"
+        : task.status?.state || (task.exitCode != null ? "stopped" : "idle");
+      wakeState.textContent = state;
+      wakeDot.className = `status-dot ${state}`;
+      wakeDetail.textContent =
+        task.status?.summary?.dashboardMessage ||
+        (task.status?.clicked != null
+          ? `${task.status.clicked} woken`
+          : task.status?.message || "—");
+      continue;
+    }
+
+    if (task.id === "incidents-monitor") continue;
+
     const panel = document.querySelector(`[data-task="${task.id}"]`);
     if (!panel) continue;
     const state = task.running
@@ -70,19 +89,15 @@ function renderTasks(tasks) {
         task.status?.remaining != null
           ? String(task.status.remaining)
           : task.status?.message || "—";
-    } else if (task.id === "wake-trucks") {
-      const summary = task.status?.summary;
-      detail =
-        summary?.dashboardMessage ||
-        (task.status?.clicked != null
-          ? `${task.status.clicked} Wake/Retry`
-          : task.status?.message || "—");
     }
     panel.querySelector('[data-role="detail"]').textContent = detail;
   }
 
   const homeTasks = tasks.filter(
-    (task) => task.id !== "depot-monitor" && task.id !== "incidents-monitor"
+    (task) =>
+      task.id !== "depot-monitor" &&
+      task.id !== "incidents-monitor" &&
+      task.id !== "wake-trucks"
   );
   logTabs.innerHTML = "";
   for (const task of homeTasks) {

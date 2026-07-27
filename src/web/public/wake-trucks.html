@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wake Trucks · clickbot</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="atmosphere" aria-hidden="true"></div>
+    <header class="hero hero-compact">
+      <nav class="top-nav">
+        <a class="nav-link" href="/">Home</a>
+        <a class="nav-link" href="/depot">Depot Monitor</a>
+        <a class="nav-link" href="/incidents-drivers">Incidents and Drivers</a>
+        <a class="nav-link active" href="/wake-trucks">Wake Trucks</a>
+      </nav>
+      <p class="eyebrow">Lytx Video Search</p>
+      <h1 class="brand brand-sm">Wake Trucks</h1>
+      <p class="lede">
+        Stage 1 wakes every truck that needs Wake / Retry. Stage 2 comes next.
+      </p>
+      <div class="hero-meta">
+        <span id="hostLine">Starting…</span>
+        <span id="clockLine"></span>
+      </div>
+    </header>
+
+    <main class="depot-main">
+      <section class="control-bar">
+        <div class="control-status">
+          <span class="status-dot" id="wakeDot"></span>
+          <div>
+            <strong id="wakeState">idle</strong>
+            <p id="wakeMessage">Ready for Stage 1</p>
+          </div>
+        </div>
+        <div class="task-actions">
+          <button type="button" class="btn primary" id="startBtn">Start Stage 1</button>
+          <button type="button" class="btn" id="stopBtn">Stop</button>
+        </div>
+      </section>
+
+      <section class="truck-manager" aria-label="Stage 1 — Wake">
+        <div class="section-head">
+          <div>
+            <h2>Stage 1 — Wake</h2>
+            <p>
+              One pass through Lytx Vehicles. Clicks Wake / Retry on every page, then lists every truck woken for Stage 2.
+            </p>
+          </div>
+          <div class="count-block">
+            <span class="count-label">Woken</span>
+            <strong id="wokenCount">0</strong>
+          </div>
+        </div>
+
+        <dl class="task-stats wake-stage-stats">
+          <div><dt>Pages</dt><dd id="pagesDetail">—</dd></div>
+          <div><dt>Result</dt><dd id="resultDetail">—</dd></div>
+        </dl>
+
+        <div class="section-subhead">
+          <h3>Trucks woken — comma-separated (copy for Stage 2)</h3>
+          <button type="button" class="btn" id="copyBtn" disabled>Copy list</button>
+        </div>
+        <pre id="truckList" class="log-view wake-truck-list">Run Stage 1 to get the truck list.</pre>
+        <p id="copyNote" class="form-note"></p>
+      </section>
+
+      <section class="truck-manager" aria-label="Stage 2">
+        <div class="section-head">
+          <div>
+            <h2>Stage 2</h2>
+            <p>
+              Coming next. Stage 1’s woken truck list will feed into this step.
+            </p>
+          </div>
+        </div>
+        <p class="form-note" id="stage2Note">Stage 2 is not ready yet.</p>
+      </section>
+
+      <section class="log-board" aria-label="Wake Trucks log">
+        <div class="section-head">
+          <div>
+            <h2>Activity</h2>
+            <p>Latest Wake Trucks lines, including the run summary.</p>
+          </div>
+        </div>
+        <pre id="logView" class="log-view">No log lines yet.</pre>
+      </section>
+    </main>
+
+    <script type="module" src="/wake-trucks.js?v=20260727a"></script>
+  </body>
+</html>

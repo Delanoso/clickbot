@@ -80,6 +80,7 @@ function readBody(req) {
 function serveStatic(req, res, urlPath) {
   let relative = urlPath === "/" ? "/index.html" : urlPath;
   if (relative === "/depot" || relative === "/depot/") relative = "/depot.html";
+  if (relative === "/wake-trucks" || relative === "/wake-trucks/") relative = "/wake-trucks.html";
   if (
     relative === "/incidents-drivers" ||
     relative === "/incidents-drivers/" ||
