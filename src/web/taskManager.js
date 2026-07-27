@@ -3,6 +3,7 @@ import { createWriteStream, existsSync, mkdirSync, readFileSync } from "node:fs"
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readTaskStatus, runtimeDir, writeTaskStatus } from "../utils/taskStatus.js";
+import { clearWakeStage2 } from "./wakeStage2.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -80,6 +81,11 @@ export function startTask(taskId, { configPath = "config/local.json" } = {}) {
     return getTask(taskId);
   }
 
+  if (taskId === "wake-trucks") {
+    // Stage 2 is session-only — a new Stage 1 run clears it.
+    clearWakeStage2("Cleared — Stage 1 started");
+  }
+
   mkdirSync(runtimeDir, { recursive: true });
   const out = createWriteStream(logPath(taskId), { flags: "a" });
   const child = spawn(
@@ -100,6 +106,14 @@ export function startTask(taskId, { configPath = "config/local.json" } = {}) {
 
   child.on("exit", (code) => {
     child.exitCode = code;
+    const prev = readTaskStatus(taskId);
+    if (prev?.state === "done" || prev?.state === "error") {
+      writeTaskStatus(taskId, {
+        ...prev,
+        exitCode: code,
+      });
+      return;
+    }
     writeTaskStatus(taskId, {
       state: "stopped",
       exitCode: code,

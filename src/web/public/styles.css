@@ -724,3 +724,12 @@ main {
   margin: 0;
   font-size: 1rem;
 }
+
+.wake-stage2-bar {
+  margin-bottom: 0.75rem;
+}
+
+a.btn.is-disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}

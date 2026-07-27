@@ -23,6 +23,16 @@ import {
 } from "./incidentsConfig.js";
 import { fetchVehicleDriverName } from "./fetchVehicleDriver.js";
 import {
+  buildWakeStage2ExportCsv,
+  getWakeStage2,
+  isWakeStage2Cancelled,
+  markWakeStage2Looking,
+  setWakeStage2Driver,
+  setWakeStage2Error,
+  startWakeStage2,
+  stopWakeStage2,
+} from "./wakeStage2.js";
+import {
   getDepotSnapshot,
   getIncidentsSnapshot,
   getTask,
@@ -262,6 +272,61 @@ async function processIncidentsDriverLookupQueue() {
   }
 }
 
+const wakeStage2LookupQueue = [];
+let wakeStage2LookupRunning = false;
+
+function queueWakeStage2Lookups(trucks) {
+  wakeStage2LookupQueue.length = 0;
+  for (const truck of trucks) {
+    const id = String(truck || "").trim().toUpperCase();
+    if (id) wakeStage2LookupQueue.push(id);
+  }
+  void processWakeStage2LookupQueue();
+}
+
+async function processWakeStage2LookupQueue() {
+  if (wakeStage2LookupRunning) return;
+  wakeStage2LookupRunning = true;
+  try {
+    while (wakeStage2LookupQueue.length) {
+      if (isWakeStage2Cancelled()) {
+        wakeStage2LookupQueue.length = 0;
+        break;
+      }
+      const truck = wakeStage2LookupQueue.shift();
+      markWakeStage2Looking(truck);
+      try {
+        console.log(`[wake-stage2] Looking up driver for ${truck}...`);
+        const driver = await fetchVehicleDriverName(truck, CONFIG_PATH);
+        if (isWakeStage2Cancelled()) break;
+        setWakeStage2Driver(truck, driver);
+        console.log(`[wake-stage2] ${truck} -> ${driver || "(no driver)"}`);
+      } catch (error) {
+        if (isWakeStage2Cancelled()) break;
+        setWakeStage2Error(truck, error);
+        console.log(
+          `[wake-stage2] Driver lookup failed for ${truck}: ${error.message || error}`
+        );
+      }
+    }
+  } finally {
+    wakeStage2LookupRunning = false;
+    if (wakeStage2LookupQueue.length && !isWakeStage2Cancelled()) {
+      void processWakeStage2LookupQueue();
+    }
+  }
+}
+
+function stage1WokenTrucks() {
+  const task = getTask("wake-trucks");
+  const status = task?.status || {};
+  const fromSummary = status.summary?.clickedVehicles;
+  const fromStatus = status.clickedVehicles;
+  return [...(fromSummary || fromStatus || [])]
+    .map((t) => String(t || "").trim().toUpperCase())
+    .filter(Boolean);
+}
+
 function csvEscape(value) {
   const text = String(value ?? "");
   if (/[",\r\n]/.test(text)) {
@@ -401,6 +466,42 @@ async function handleApi(req, res, url) {
       johannesburg: getJohannesburgCoverageSummary(),
       task: getTask("incidents-monitor"),
     });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/wake-trucks") {
+    return sendJson(res, 200, {
+      task: getTask("wake-trucks"),
+      stage2: getWakeStage2(),
+      stage1Trucks: stage1WokenTrucks(),
+    });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/wake-trucks/stage2/start") {
+    const trucks = stage1WokenTrucks();
+    try {
+      const stage2 = startWakeStage2(trucks);
+      queueWakeStage2Lookups(stage2.trucks.map((r) => r.truck));
+      return sendJson(res, 200, { stage2 });
+    } catch (error) {
+      return sendJson(res, 400, { error: error.message || String(error) });
+    }
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/wake-trucks/stage2/stop") {
+    wakeStage2LookupQueue.length = 0;
+    return sendJson(res, 200, { stage2: stopWakeStage2() });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/wake-trucks/stage2/export") {
+    const csv = buildWakeStage2ExportCsv();
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    res.writeHead(200, {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="wake-trucks-drivers-${stamp}.csv"`,
+      "Cache-Control": "no-store",
+    });
+    res.end(csv);
+    return;
   }
 
   if (req.method === "GET" && url.pathname === "/api/incidents/export") {
