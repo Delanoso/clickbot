@@ -121,6 +121,7 @@ export async function setVehiclesPageSize(page, pageSize = 100) {
   const current = await readCurrentPageSize(page);
   if (current === pageSize) {
     console.log(`[wake] Already showing ${pageSize} vehicles per page`);
+    await waitForVehicleRows(page, 50, 45000);
     return;
   }
 
@@ -389,6 +390,9 @@ export async function refreshVehiclesList(page, appConfig = {}, wakeConfig = {},
   console.log("[wake] Refreshing vehicles list and page size…");
   await ensureVehiclesListPage(page, appConfig, wakeConfig);
   await setVehiclesPageSize(page, pageSize);
+  await goToFirstPage(page);
+  await sleep(1000);
+  await waitForVehicleRows(page, 50, 45000);
 }
 
 async function primeVehicleTable(page) {
