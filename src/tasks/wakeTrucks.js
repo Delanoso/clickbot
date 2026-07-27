@@ -40,6 +40,19 @@ export async function runWakeTrucks(config) {
     );
     console.log(`[wake] Pass 1 done — clicked ${pass1.clicked} on ${pass1.pages} page(s)`);
 
+    if (wake.pass1Only) {
+      console.log("[wake] pass1Only — stopping after pass 1");
+      writeTaskStatus("wake-trucks", {
+        state: "done",
+        message: `Pass 1 done — clicked ${pass1.clicked} Wake/Retry`,
+        pass: 1,
+        clicked: pass1.clicked,
+        pass1Clicks: pass1.clicked,
+        pass2Clicks: 0,
+      });
+      return;
+    }
+
     console.log(`[wake] Waiting ${waitMs / 1000}s before pass 2…`);
     writeTaskStatus("wake-trucks", {
       state: "running",

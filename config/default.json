@@ -45,7 +45,8 @@
   "wakeTrucks": {
     "pageSize": 100,
     "clickDelayMs": 1000,
-    "waitBetweenPassesMs": 180000
+    "waitBetweenPassesMs": 180000,
+    "pass1Only": true
   },
   "apps": {
     "dispatch": {
