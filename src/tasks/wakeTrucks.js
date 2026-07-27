@@ -2,6 +2,7 @@ import { openLytxVehicles } from "../browser.js";
 import {
   collectNotBrowseTrucks,
   ensureVehiclesListPage,
+  refreshVehiclesList,
   runWakePass,
   setVehiclesPageSize,
 } from "../apps/lytxWakeTrucks.js";
@@ -57,6 +58,7 @@ export async function runWakeTrucks(config) {
     });
     await sleep(waitMs);
 
+    await refreshVehiclesList(page, vehiclesApp, wake, pageSize);
     console.log("[wake] Pass 2 starting…");
     writeTaskStatus("wake-trucks", {
       state: "running",
@@ -76,6 +78,7 @@ export async function runWakeTrucks(config) {
     });
     await sleep(waitMs);
 
+    await refreshVehiclesList(page, vehiclesApp, wake, pageSize);
     console.log("[wake] Final scan — trucks still not Browse…");
     writeTaskStatus("wake-trucks", {
       state: "running",
@@ -88,6 +91,14 @@ export async function runWakeTrucks(config) {
     if (!stillNotBrowse.length) {
       console.log("(none — all trucks show Browse)");
     } else {
+      const retryCount = stillNotBrowse.filter((r) => r.status === "retry").length;
+      if (retryCount) {
+        console.log(`--- ${retryCount} Could not wake / Retry ---`);
+        for (const row of stillNotBrowse.filter((r) => r.status === "retry")) {
+          console.log(`${row.vehicleId}: ${row.detail}`);
+        }
+      }
+      console.log("--- All trucks still not on Browse ---");
       for (const row of stillNotBrowse) {
         console.log(`${row.vehicleId}: ${row.detail}`);
       }

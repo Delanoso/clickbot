@@ -312,6 +312,42 @@ export async function goToNextPage(page) {
 export async function goToFirstPage(page) {
   await scrollPaginationIntoView(page);
 
+  const jumped = await page.evaluate(() => {
+    const isDisabledControl = (el) => {
+      if (!el) return true;
+      if (el.disabled || el.getAttribute("aria-disabled") === "true") return true;
+      if (el.classList?.contains("disabled")) return true;
+      const style = window.getComputedStyle(el);
+      return style.pointerEvents === "none" || style.visibility === "hidden";
+    };
+
+    const tryClick = (el) => {
+      if (!el || isDisabledControl(el)) return false;
+      const r = el.getBoundingClientRect();
+      if (r.width < 4 || r.height < 4) return false;
+      el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+      return true;
+    };
+
+    for (const el of document.querySelectorAll("button, a, [role='button'], span, i")) {
+      const label = `${el.getAttribute("aria-label") || ""} ${el.getAttribute("title") || ""}`.toLowerCase();
+      const text = (el.innerText || el.textContent || "").trim();
+      if (label.includes("first page") || text === "«" || text === "|«") {
+        if (tryClick(el)) return "first";
+      }
+      if (/^1$/.test(text)) {
+        const pager = el.closest("[class*='pag'], [class*='Pager'], .pagination");
+        if (pager && tryClick(el)) return "page-1";
+      }
+    }
+    return null;
+  });
+
+  if (jumped) {
+    await sleep(1200);
+    return;
+  }
+
   for (let attempt = 0; attempt < 50; attempt += 1) {
     const viaDom = await page.evaluate(() => {
       const isDisabledControl = (el) => {
@@ -349,11 +385,52 @@ export async function goToFirstPage(page) {
   }
 }
 
+export async function refreshVehiclesList(page, appConfig = {}, wakeConfig = {}, pageSize = 100) {
+  console.log("[wake] Refreshing vehicles list and page size…");
+  await ensureVehiclesListPage(page, appConfig, wakeConfig);
+  await setVehiclesPageSize(page, pageSize);
+}
+
+async function primeVehicleTable(page) {
+  await page.evaluate(() => {
+    const scrollables = [
+      ...document.querySelectorAll("table tbody, [role='rowgroup'], [class*='scroll'], [class*='table']"),
+    ];
+    for (const el of scrollables) {
+      if (el.scrollHeight > el.clientHeight + 4) {
+        el.scrollTop = 0;
+        el.scrollTop = el.scrollHeight;
+        el.scrollTop = 0;
+      }
+    }
+    window.scrollTo(0, 0);
+  });
+  await sleep(400);
+}
+
 export async function scanVehicleRows(page) {
+  await primeVehicleTable(page);
+
   return page.evaluate(() => {
     const vehicleRe = /\b([A-Z]{1,3}\d{3,5}[A-Z]{0,3})\b/;
-    const rows = [];
 
+    const classify = (text, actionLabels) => {
+      for (const label of actionLabels) {
+        if (/could not wake|retry\??/i.test(label)) return "retry";
+        if (/waking\s*up/i.test(label)) return "waking";
+        if (/^wake$/i.test(label)) return "wake";
+        if (/not available/i.test(label)) return "not_available";
+        if (/^browse$/i.test(label)) return "browse";
+      }
+      if (/Could not wake|Retry\??/i.test(text)) return "retry";
+      if (/Waking\s*Up/i.test(text)) return "waking";
+      if (/\bWake\b/i.test(text)) return "wake";
+      if (/Not available/i.test(text)) return "not_available";
+      if (/\bBrowse\b/i.test(text)) return "browse";
+      return "other";
+    };
+
+    const rows = [];
     const candidates = [
       ...document.querySelectorAll("table tbody tr"),
       ...document.querySelectorAll("[role='row']"),
@@ -363,6 +440,7 @@ export async function scanVehicleRows(page) {
     for (const tr of candidates) {
       const text = (tr.innerText || tr.textContent || "").replace(/\s+/g, " ").trim();
       if (!text || text.length < 8) continue;
+      if (/^vehicle\b/i.test(text) && !vehicleRe.test(text)) continue;
 
       const idMatch = text.match(vehicleRe);
       if (!idMatch) continue;
@@ -370,13 +448,11 @@ export async function scanVehicleRows(page) {
       if (seen.has(vehicleId)) continue;
       seen.add(vehicleId);
 
-      let status = "other";
-      if (/\bBrowse\b/i.test(text)) status = "browse";
-      else if (/Waking\s*Up/i.test(text)) status = "waking";
-      else if (/Retry/i.test(text) || /Could not wake/i.test(text)) status = "retry";
-      else if (/\bWake\b/i.test(text)) status = "wake";
-      else if (/Not available/i.test(text)) status = "not_available";
+      const actionLabels = [...tr.querySelectorAll("a, button, [role='button'], [role='link']")]
+        .map((el) => (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim())
+        .filter(Boolean);
 
+      const status = classify(text, actionLabels);
       rows.push({ vehicleId, status, text });
     }
     return rows;
@@ -482,7 +558,10 @@ async function waitForVehicleRows(page, minRows = 1, timeoutMs = 60000) {
 export async function runWakePass(page, { clickDelayMs = 1000, passNumber = 1 } = {}) {
   await goToFirstPage(page);
   await sleep(500);
-  await waitForVehicleRows(page, 1, 30000);
+  const rowCount = await waitForVehicleRows(page, 50, 45000);
+  if (rowCount < 50) {
+    console.log(`[wake] Warning: pass ${passNumber} page 1 only has ${rowCount} rows — list may be stale`);
+  }
 
   let clicked = 0;
   let pages = 0;
@@ -503,6 +582,8 @@ export async function runWakePass(page, { clickDelayMs = 1000, passNumber = 1 } 
         clicked += 1;
         console.log(`[wake] Clicked ${action} on ${row.vehicleId}`);
         await sleep(clickDelayMs);
+      } else {
+        console.log(`[wake] Could not click Wake/Retry on ${row.vehicleId}`);
       }
     }
 
@@ -520,36 +601,56 @@ export async function runWakePass(page, { clickDelayMs = 1000, passNumber = 1 } 
 export async function collectNotBrowseTrucks(page) {
   await goToFirstPage(page);
   await sleep(500);
-  await waitForVehicleRows(page, 1, 30000);
+  await waitForVehicleRows(page, 50, 45000);
 
   const out = [];
   const seen = new Set();
   const { total } = await readPagination(page);
   const maxPages = Math.max(total, 1);
+  const statusCounts = {};
 
   for (let pageNum = 1; pageNum <= maxPages; pageNum += 1) {
     const rows = await scanVehicleRows(page);
+    let pageHits = 0;
     for (const row of rows) {
+      statusCounts[row.status] = (statusCounts[row.status] || 0) + 1;
       if (row.status === "browse" || seen.has(row.vehicleId)) continue;
+      pageHits += 1;
       seen.add(row.vehicleId);
       out.push({
         vehicleId: row.vehicleId,
         status: row.status,
-        detail: summarizeStatus(row.text),
+        detail: summarizeStatus(row.text, row.status),
       });
     }
+    console.log(
+      `[wake] Final scan page ${pageNum}/${maxPages}: ${rows.length} rows, ${pageHits} not Browse`
+    );
+
+    if (rows.length < 20 && pageNum === 1) {
+      console.log(
+        `[wake] Warning: only ${rows.length} rows on page 1 — table may be stale; results may be incomplete`
+      );
+    }
+
     if (pageNum >= maxPages) break;
     const moved = await goToNextPage(page);
     if (!moved) {
       console.log(`[wake] Stopped at page ${pageNum}/${maxPages} — next-page control not found`);
       break;
     }
+    await waitForVehicleRows(page, 1, 15000);
   }
 
+  console.log(`[wake] Final scan status counts: ${JSON.stringify(statusCounts)}`);
   return out.sort((a, b) => a.vehicleId.localeCompare(b.vehicleId));
 }
 
-function summarizeStatus(text) {
+function summarizeStatus(text, status) {
+  if (status === "retry") return "Could not wake, Retry?";
+  if (status === "waking") return "Waking Up";
+  if (status === "wake") return "Wake";
+  if (status === "not_available") return "Not available, No Recent Activity";
   if (/Not available/i.test(text)) return "Not available, No Recent Activity";
   if (/Waking\s*Up/i.test(text)) return "Waking Up";
   if (/Retry/i.test(text) || /Could not wake/i.test(text)) return "Could not wake, Retry?";
