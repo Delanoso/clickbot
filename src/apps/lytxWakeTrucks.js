@@ -2,70 +2,199 @@
  * Lytx Video Search → Vehicles → Wake / Retry automation.
  */
 
+const VEHICLE_LIST_URLS = [
+  "https://app.lytx.com/#/video-search/vehicles",
+  "https://app.lytx.com/#/video-search/vehicle-list",
+  "https://app.lytx.com/#/vehicles",
+  "https://app.lytx.com/",
+];
+
 export async function ensureVehiclesListPage(page, appConfig = {}, wakeConfig = {}) {
-  const workUrl = wakeConfig.workUrl || appConfig.workUrl || "https://app.lytx.com/";
-  if (!/app\.lytx\.com/i.test(page.url())) {
-    await page.goto(workUrl, { waitUntil: "domcontentloaded" });
-    await sleep(1500);
-  }
+  const configured = [
+    wakeConfig.vehiclesListUrl,
+    appConfig.vehiclesListUrl,
+    appConfig.workUrl,
+    ...VEHICLE_LIST_URLS,
+  ].filter(Boolean);
 
-  // Top nav: Video Search
-  const videoSearch = page.getByRole("link", { name: /Video Search/i }).or(
-    page.getByText(/^Video Search$/i)
-  );
-  if (await videoSearch.first().isVisible().catch(() => false)) {
-    await clickStable(videoSearch.first());
-    await sleep(1200);
-  }
-
-  // Left sidebar: Vehicles (truck icon area — often labeled Vehicles)
-  const vehiclesNav = page
-    .locator("a, button, [role='button'], [role='link']")
-    .filter({ hasText: /^Vehicles$/i });
-  if (await vehiclesNav.first().isVisible().catch(() => false)) {
-    await clickStable(vehiclesNav.first());
-  } else {
-    // Icon-only nav: second item under Video Search is often Vehicles.
-    const sidebarLinks = page.locator("nav a, .sidebar a, [class*='sidebar'] a");
-    const count = await sidebarLinks.count().catch(() => 0);
-    for (let i = 0; i < Math.min(count, 8); i += 1) {
-      const link = sidebarLinks.nth(i);
-      const label = ((await link.getAttribute("title").catch(() => "")) || "").toLowerCase();
-      const aria = ((await link.getAttribute("aria-label").catch(() => "")) || "").toLowerCase();
-      if (label.includes("vehicle") || aria.includes("vehicle")) {
-        await clickStable(link);
-        break;
+  for (const url of [...new Set(configured)]) {
+    try {
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 90000 });
+      await page.waitForLoadState("networkidle", { timeout: 20000 }).catch(() => {});
+      await sleep(1500);
+      if (await isOnVehiclesList(page)) {
+        console.log(`[wake] Vehicles list ready at ${page.url()}`);
+        return;
       }
+    } catch {
+      /* try next URL */
     }
   }
 
-  await page
-    .getByText(/^VEHICLES$/i)
-    .first()
-    .waitFor({ state: "visible", timeout: 60000 })
-    .catch(() => {});
-  await sleep(800);
+  console.log("[wake] Direct URL did not land on Vehicles — using UI navigation");
+  await navigateVehiclesViaUi(page);
+  await waitForVehiclesList(page, 90000);
+  console.log(`[wake] Vehicles list ready at ${page.url()}`);
+}
+
+async function navigateVehiclesViaUi(page) {
+  // Top nav tab
+  const videoSearch = page
+    .getByRole("tab", { name: /Video Search/i })
+    .or(page.getByRole("link", { name: /Video Search/i }))
+    .or(page.locator("a, button, span, div").filter({ hasText: /^Video Search$/i }));
+  if (await videoSearch.first().isVisible().catch(() => false)) {
+    await clickStable(videoSearch.first());
+    await sleep(1500);
+  }
+
+  // Left sidebar Vehicles
+  const vehiclesNav = page
+    .locator("a, button, [role='button'], [role='link'], [title], [aria-label]")
+    .filter({ hasText: /^Vehicles$/i });
+  if (await vehiclesNav.first().isVisible().catch(() => false)) {
+    await clickStable(vehiclesNav.first());
+    await sleep(1500);
+    return;
+  }
+
+  const clickedIcon = await page.evaluate(() => {
+    const links = [...document.querySelectorAll("a, button, [role='button']")];
+    for (const el of links) {
+      const title = `${el.getAttribute("title") || ""} ${el.getAttribute("aria-label") || ""}`.toLowerCase();
+      const text = (el.innerText || "").trim().toLowerCase();
+      if (title.includes("vehicle") || text === "vehicles") {
+        el.click();
+        return true;
+      }
+    }
+    return false;
+  });
+  if (clickedIcon) await sleep(1500);
+}
+
+async function isOnVehiclesList(page) {
+  return page.evaluate(() => {
+    const body = (document.body?.innerText || "").replace(/\s+/g, " ");
+    const hasHeader = /VEHICLES/i.test(body);
+    const hasTable =
+      /\bBrowse\b/i.test(body) ||
+      /\bWake\b/i.test(body) ||
+      /Show:\s*\d+\s*Vehicle/i.test(body) ||
+      /VEHICLES\s+\d+\s*-\s*\d+\s+OF\s+\d+/i.test(body);
+    return hasHeader && hasTable;
+  });
+}
+
+async function waitForVehiclesList(page, timeoutMs = 60000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (await isOnVehiclesList(page)) return true;
+    await sleep(800);
+  }
+  const snippet = await page
+    .evaluate(() => (document.body?.innerText || "").slice(0, 500))
+    .catch(() => "");
+  throw new Error(
+    `Vehicles list did not load (url=${page.url()}). Page starts: ${snippet.replace(/\s+/g, " ").slice(0, 200)}`
+  );
+}
+
+async function readCurrentPageSize(page) {
+  return page.evaluate(() => {
+    const body = document.body?.innerText || "";
+    const show = body.match(/Show:\s*(\d+)\s*Vehicles?/i);
+    if (show) return Number(show[1]);
+    const range = body.match(/VEHICLES\s+\d+\s*-\s*(\d+)\s+OF\s+(\d+)/i);
+    if (range) return Number(range[1]);
+    return null;
+  });
 }
 
 /**
  * Open the bottom-left "Show: N Vehicles" menu and pick 100 per page.
- * (411 trucks ≈ 5 pages at 100/page.)
  */
 export async function setVehiclesPageSize(page, pageSize = 100) {
-  const trigger = page
-    .getByText(new RegExp(`Show:\\s*\\d+\\s*Vehicles?`, "i"))
-    .first();
-  await trigger.scrollIntoViewIfNeeded().catch(() => {});
-  await clickStable(trigger);
-  await sleep(400);
+  await waitForVehiclesList(page, 30000);
 
-  const option = page
-    .getByText(new RegExp(`Show:\\s*${pageSize}\\s*Vehicles?`, "i"))
-    .first();
-  await option.waitFor({ state: "visible", timeout: 15000 });
-  await clickStable(option);
-  await sleep(2000);
-  console.log(`[wake] Page size set to ${pageSize} vehicles`);
+  const current = await readCurrentPageSize(page);
+  if (current === pageSize) {
+    console.log(`[wake] Already showing ${pageSize} vehicles per page`);
+    return;
+  }
+
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await sleep(1000);
+
+  const opened = await page.evaluate(() => {
+    const candidates = [
+      ...document.querySelectorAll("a, button, span, div, li, label, [role='button'], [role='menuitem']"),
+    ];
+    for (const el of candidates) {
+      const text = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
+      if (!/^show:\s*\d+\s*vehicles?$/i.test(text)) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 4 || r.height < 4) continue;
+      el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+      return text;
+    }
+    return null;
+  });
+
+  if (opened) {
+    console.log(`[wake] Opened page size menu (${opened})`);
+    await sleep(600);
+  } else {
+    const trigger = page
+      .locator("a, button, span, div, li")
+      .filter({ hasText: /Show:\s*\d+\s*Vehicle/i })
+      .first();
+    await trigger.waitFor({ state: "visible", timeout: 20000 });
+    await clickStable(trigger);
+    console.log("[wake] Opened page size menu via locator");
+    await sleep(600);
+  }
+
+  const targetRe = new RegExp(`^show:\\s*${pageSize}\\s*vehicles?$`, "i");
+  const picked = await page.evaluate((size) => {
+    const want = new RegExp(`^show:\\s*${size}\\s*vehicles?$`, "i");
+    const items = [
+      ...document.querySelectorAll(
+        "a, button, span, div, li, [role='menuitem'], [role='option'], .dropdown-item, .menu-item"
+      ),
+    ];
+    for (const el of items) {
+      const text = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
+      if (!want.test(text)) continue;
+      el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+      return text;
+    }
+    return null;
+  }, pageSize);
+
+  if (!picked) {
+    const option = page
+      .locator("a, button, span, div, li, [role='menuitem']")
+      .filter({ hasText: targetRe })
+      .first();
+    await option.waitFor({ state: "visible", timeout: 15000 });
+    await clickStable(option);
+    console.log(`[wake] Selected Show: ${pageSize} Vehicles via locator`);
+  } else {
+    console.log(`[wake] Selected ${picked}`);
+  }
+
+  await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {});
+  await sleep(2500);
+
+  const after = await readCurrentPageSize(page);
+  if (after !== pageSize) {
+    console.log(
+      `[wake] Warning: requested ${pageSize}/page but page reports ${after ?? "unknown"} — continuing`
+    );
+  } else {
+    console.log(`[wake] Page size set to ${pageSize} vehicles`);
+  }
 }
 
 export async function readPagination(page) {
@@ -105,9 +234,6 @@ export async function goToFirstPage(page) {
   }
 }
 
-/**
- * Scan the vehicles table. Returns rows with vehicleId + status bucket.
- */
 export async function scanVehicleRows(page) {
   return page.evaluate(() => {
     const vehicleRe = /\b([A-Z]{1,3}\d{3,5}[A-Z]{0,3})\b/;
@@ -244,9 +370,9 @@ function summarizeStatus(text) {
 async function clickStable(locator) {
   await locator.scrollIntoViewIfNeeded().catch(() => {});
   try {
-    await locator.click({ timeout: 5000 });
+    await locator.click({ timeout: 8000 });
   } catch {
-    await locator.click({ force: true, timeout: 8000 });
+    await locator.click({ force: true, timeout: 12000 });
   }
 }
 

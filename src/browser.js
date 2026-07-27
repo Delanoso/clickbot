@@ -88,8 +88,10 @@ export async function openLytxVehicles(config) {
   await maybeLogin(page, vehicles, "vehicles");
 
   const workUrl = vehicles.workUrl || "https://app.lytx.com/";
-  if (!page.url().includes("app.lytx.com")) {
+  await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {});
+  if (!/app\.lytx\.com/i.test(page.url())) {
     await page.goto(workUrl, { waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {});
   }
 
   return { browser, context, page };
