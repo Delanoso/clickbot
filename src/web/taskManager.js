@@ -40,7 +40,7 @@ export const TASKS = [
   {
     id: "wake-trucks",
     name: "Wake Trucks",
-    summary: "Lytx Video Search — Wake/Retry all vehicles, report trucks still not Browse.",
+    summary: "Lytx Video Search — one pass Wake/Retry all pages, run summary in logs.",
     cli: "wake-trucks",
   },
 ];

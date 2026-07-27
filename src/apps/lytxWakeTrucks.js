@@ -605,6 +605,9 @@ export async function runWakePass(page, { clickDelayMs = 1000, passNumber = 1 } 
 
   let clicked = 0;
   let pages = 0;
+  const clickedVehicles = [];
+  const pageResults = [];
+  const warnings = [];
   const { total } = await readPagination(page);
   const maxPages = Math.max(total, 1);
 
@@ -612,14 +615,20 @@ export async function runWakePass(page, { clickDelayMs = 1000, passNumber = 1 } 
     pages += 1;
     const rows = await scanVehicleRows(page);
     const targets = rows.filter(shouldClickWake);
+    let pageClicked = 0;
+    const pageClickedIds = [];
+
     console.log(
-      `[wake] Pass ${passNumber} page ${pageNum}/${maxPages}: ${targets.length} Wake/Retry of ${rows.length} rows`
+      `[wake] Page ${pageNum}/${maxPages}: ${targets.length} Wake/Retry of ${rows.length} rows`
     );
 
     for (const row of targets) {
       const action = await clickWakeOrRetryForVehicle(page, row.vehicleId);
       if (action) {
         clicked += 1;
+        pageClicked += 1;
+        clickedVehicles.push(row.vehicleId);
+        pageClickedIds.push(row.vehicleId);
         console.log(`[wake] Clicked ${action} on ${row.vehicleId}`);
         await sleep(clickDelayMs);
       } else {
@@ -627,21 +636,39 @@ export async function runWakePass(page, { clickDelayMs = 1000, passNumber = 1 } 
       }
     }
 
+    let pageWarning = null;
+    if (pageNum >= maxPages && rows.length < 5) {
+      pageWarning = `Page ${pageNum} only had ${rows.length} rows — last page may be incomplete`;
+      warnings.push(pageWarning);
+    }
+
+    pageResults.push({
+      pageNum,
+      maxPages,
+      rows: rows.length,
+      targets: targets.length,
+      clicked: pageClicked,
+      clickedIds: pageClickedIds,
+      warning: pageWarning,
+    });
+
     if (pageNum >= maxPages) break;
     const moved = await goToNextPage(page);
     if (!moved) {
-      console.log(`[wake] Stopped at page ${pageNum}/${maxPages} — next-page control not found`);
+      const msg = `Stopped at page ${pageNum}/${maxPages} — next-page control not found`;
+      console.log(`[wake] ${msg}`);
+      warnings.push(msg);
       break;
     }
     const afterPageRows = await waitForVehicleDataLoaded(page, 30000);
     if (afterPageRows < 5) {
-      console.log(
-        `[wake] Warning: page ${pageNum + 1} only has ${afterPageRows} rows after paging — table may be stale`
-      );
+      const msg = `Page ${pageNum + 1} only has ${afterPageRows} rows after paging — table may be stale`;
+      console.log(`[wake] Warning: ${msg}`);
+      warnings.push(msg);
     }
   }
 
-  return { clicked, pages };
+  return { clicked, pages, maxPages, pageResults, clickedVehicles, warnings };
 }
 
 export async function collectNotBrowseTrucks(page) {

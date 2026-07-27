@@ -71,16 +71,12 @@ function renderTasks(tasks) {
           ? String(task.status.remaining)
           : task.status?.message || "—";
     } else if (task.id === "wake-trucks") {
-      const count = task.status?.stillNotBrowseCount;
-      const retryCount = task.status?.stillNotBrowse?.filter((r) => r.status === "retry")?.length;
+      const summary = task.status?.summary;
       detail =
-        count != null
-          ? count === 0
-            ? "All Browse"
-            : retryCount
-              ? `${retryCount} could not wake (+${count - retryCount} other)`
-              : `${count} not Browse`
-          : task.status?.message || "—";
+        summary?.dashboardMessage ||
+        (task.status?.clicked != null
+          ? `${task.status.clicked} Wake/Retry`
+          : task.status?.message || "—");
     }
     panel.querySelector('[data-role="detail"]').textContent = detail;
   }
