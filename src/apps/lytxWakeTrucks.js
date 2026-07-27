@@ -187,6 +187,7 @@ export async function setVehiclesPageSize(page, pageSize = 100) {
 
   await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {});
   await sleep(2500);
+  await waitForVehicleRows(page, 1, 45000);
 
   const after = await readCurrentPageSize(page);
   if (after !== pageSize) {
@@ -411,9 +412,29 @@ export async function clickWakeOrRetryForVehicle(page, vehicleId) {
   return false;
 }
 
+async function waitForVehicleRows(page, minRows = 1, timeoutMs = 60000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const rows = await scanVehicleRows(page);
+    if (rows.length >= minRows) return rows.length;
+    await sleep(1000);
+  }
+  const count = (await scanVehicleRows(page)).length;
+  if (count < minRows) {
+    const snippet = await page
+      .evaluate(() => (document.body?.innerText || "").slice(0, 400))
+      .catch(() => "");
+    console.log(
+      `[wake] Warning: only ${count} vehicle row(s) after ${timeoutMs / 1000}s (url=${page.url()}). Snippet: ${snippet.replace(/\s+/g, " ").slice(0, 160)}`
+    );
+  }
+  return count;
+}
+
 export async function runWakePass(page, { clickDelayMs = 1000, passNumber = 1 } = {}) {
   await goToFirstPage(page);
   await sleep(500);
+  await waitForVehicleRows(page, 1, 30000);
 
   let clicked = 0;
   let pages = 0;
@@ -439,7 +460,10 @@ export async function runWakePass(page, { clickDelayMs = 1000, passNumber = 1 } 
 
     if (pageNum >= maxPages) break;
     const moved = await goToNextPage(page);
-    if (!moved) break;
+    if (!moved) {
+      console.log(`[wake] Stopped at page ${pageNum}/${maxPages} — next-page control not found`);
+      break;
+    }
   }
 
   return { clicked, pages };
@@ -448,6 +472,7 @@ export async function runWakePass(page, { clickDelayMs = 1000, passNumber = 1 } 
 export async function collectNotBrowseTrucks(page) {
   await goToFirstPage(page);
   await sleep(500);
+  await waitForVehicleRows(page, 1, 30000);
 
   const out = [];
   const seen = new Set();
@@ -467,7 +492,10 @@ export async function collectNotBrowseTrucks(page) {
     }
     if (pageNum >= maxPages) break;
     const moved = await goToNextPage(page);
-    if (!moved) break;
+    if (!moved) {
+      console.log(`[wake] Stopped at page ${pageNum}/${maxPages} — next-page control not found`);
+      break;
+    }
   }
 
   return out.sort((a, b) => a.vehicleId.localeCompare(b.vehicleId));
