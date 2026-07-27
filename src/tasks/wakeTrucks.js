@@ -65,9 +65,7 @@ export async function runWakeTrucks(config) {
 }
 
 function buildRunSummary({ pageSize, pageSizeSet, result }) {
-  const sampleSize = 8;
-  const sample = result.clickedVehicles.slice(0, sampleSize);
-  const more = Math.max(result.clickedVehicles.length - sampleSize, 0);
+  const trucks = [...result.clickedVehicles].sort((a, b) => a.localeCompare(b));
 
   return {
     login: "OK",
@@ -75,8 +73,9 @@ function buildRunSummary({ pageSize, pageSizeSet, result }) {
     pagesScanned: `${result.pages} of ${result.maxPages}`,
     totalClicks: result.clicked,
     pageResults: result.pageResults,
-    sampleTrucks: sample,
-    moreTrucks: more,
+    clickedVehicles: trucks,
+    copyPasteLines: trucks.join("\n"),
+    copyPasteCsv: trucks.join(", "),
     warnings: result.warnings,
     dashboardMessage: `${result.clicked} Wake/Retry on ${result.pages}/${result.maxPages} pages`,
   };
@@ -94,10 +93,22 @@ function printRunSummary(summary) {
     const line = `  Page ${p.pageNum}/${p.maxPages}: ${p.rows} rows → ${p.clicked} Wake clicks`;
     console.log(p.warning ? `${line}  ⚠ ${p.warning}` : line);
   }
-  if (summary.sampleTrucks.length) {
-    const suffix = summary.moreTrucks ? ` (+${summary.moreTrucks} more)` : "";
-    console.log(`\nSample trucks woken: ${summary.sampleTrucks.join(", ")}${suffix}`);
+
+  if (summary.clickedVehicles.length) {
+    console.log("\n=== TRUCKS WOKEN — one per line (copy for step 2) ===");
+    console.log(summary.copyPasteLines);
+    console.log("\n=== TRUCKS WOKEN — comma-separated (copy for step 2) ===");
+    console.log(summary.copyPasteCsv);
+    console.log("\n=== TRUCKS WOKEN — by page ===");
+    for (const p of summary.pageResults) {
+      if (p.clickedIds?.length) {
+        console.log(`Page ${p.pageNum}: ${p.clickedIds.join(", ")}`);
+      }
+    }
+  } else {
+    console.log("\n(no trucks woken this run)");
   }
+
   if (summary.warnings.length) {
     console.log("\nWarnings:");
     for (const w of summary.warnings) console.log(`  - ${w}`);
