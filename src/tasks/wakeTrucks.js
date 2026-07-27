@@ -74,7 +74,6 @@ function buildRunSummary({ pageSize, pageSizeSet, result }) {
     totalClicks: result.clicked,
     pageResults: result.pageResults,
     clickedVehicles: trucks,
-    copyPasteLines: trucks.join("\n"),
     copyPasteCsv: trucks.join(", "),
     warnings: result.warnings,
     dashboardMessage: `${result.clicked} Wake/Retry on ${result.pages}/${result.maxPages} pages`,
@@ -95,16 +94,8 @@ function printRunSummary(summary) {
   }
 
   if (summary.clickedVehicles.length) {
-    console.log("\n=== TRUCKS WOKEN — one per line (copy for step 2) ===");
-    console.log(summary.copyPasteLines);
     console.log("\n=== TRUCKS WOKEN — comma-separated (copy for step 2) ===");
     console.log(summary.copyPasteCsv);
-    console.log("\n=== TRUCKS WOKEN — by page ===");
-    for (const p of summary.pageResults) {
-      if (p.clickedIds?.length) {
-        console.log(`Page ${p.pageNum}: ${p.clickedIds.join(", ")}`);
-      }
-    }
   } else {
     console.log("\n(no trucks woken this run)");
   }
