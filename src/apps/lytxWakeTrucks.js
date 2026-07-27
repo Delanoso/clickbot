@@ -388,12 +388,60 @@ export function shouldClickWake(row) {
 }
 
 export async function clickWakeOrRetryForVehicle(page, vehicleId) {
+  const viaDom = await page.evaluate((id) => {
+    const vehicleRe = new RegExp(`\\b${id}\\b`);
+    const rows = [
+      ...document.querySelectorAll("table tbody tr"),
+      ...document.querySelectorAll("[role='row']"),
+    ];
+
+    const tryClick = (el) => {
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      if (r.width < 4 || r.height < 4) return false;
+      el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+      return true;
+    };
+
+    for (const tr of rows) {
+      const text = (tr.innerText || tr.textContent || "").replace(/\s+/g, " ").trim();
+      if (!vehicleRe.test(text)) continue;
+
+      const controls = tr.querySelectorAll("a, button, [role='button'], [role='link'], span, div");
+      for (const el of controls) {
+        const label = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
+        if (/^wake$/i.test(label) && tryClick(el)) return "wake";
+      }
+      for (const el of controls) {
+        const label = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
+        if (/retry/i.test(label) && tryClick(el)) return "retry";
+      }
+
+      // Whole-cell click if Wake/Retry text is in the row but not a discrete button.
+      if (/\bWake\b/i.test(text) && !/\bBrowse\b/i.test(text)) {
+        for (const el of controls) {
+          const label = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
+          if (/wake/i.test(label) && tryClick(el)) return "wake";
+        }
+      }
+      if (/Retry/i.test(text) || /Could not wake/i.test(text)) {
+        for (const el of controls) {
+          const label = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
+          if (/retry/i.test(label) && tryClick(el)) return "retry";
+        }
+      }
+    }
+    return false;
+  }, vehicleId);
+
+  if (viaDom) return viaDom;
+
   const row = page.locator("tr, [role='row']").filter({ hasText: vehicleId }).first();
   if (!(await row.count())) return false;
 
   const wakeLink = row
     .locator("a, button, [role='button'], [role='link']")
-    .filter({ hasText: /^Wake$/i })
+    .filter({ hasText: /Wake/i })
     .first();
   if (await wakeLink.isVisible().catch(() => false)) {
     await clickStable(wakeLink);
