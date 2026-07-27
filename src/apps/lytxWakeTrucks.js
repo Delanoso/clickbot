@@ -332,7 +332,7 @@ export async function goToNextPage(page) {
   if (viaDom) {
     console.log(`[wake] Advanced to next page (${viaDom})`);
     await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
-    await sleep(1500);
+    await sleep(2500);
     return true;
   }
 
@@ -632,6 +632,12 @@ export async function runWakePass(page, { clickDelayMs = 1000, passNumber = 1 } 
     if (!moved) {
       console.log(`[wake] Stopped at page ${pageNum}/${maxPages} — next-page control not found`);
       break;
+    }
+    const afterPageRows = await waitForVehicleDataLoaded(page, 30000);
+    if (afterPageRows < 5) {
+      console.log(
+        `[wake] Warning: page ${pageNum + 1} only has ${afterPageRows} rows after paging — table may be stale`
+      );
     }
   }
 
