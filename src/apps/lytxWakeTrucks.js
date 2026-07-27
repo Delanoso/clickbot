@@ -196,9 +196,28 @@ async function pickPageSizeOption(page, pageSize) {
   return true;
 }
 
+async function forceReloadVehicleTable(page, pageSize = 100) {
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    console.log(`[wake] Reloading vehicle table (attempt ${attempt}/3)…`);
+    if (!(await openPageSizeMenu(page))) {
+      await sleep(2000);
+      continue;
+    }
+    await pickPageSizeOption(page, pageSize);
+    await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {});
+    await sleep(2000 + attempt * 1000);
+    const count = await waitForVehicleDataLoaded(page, 60000);
+    if (count >= 10) {
+      console.log(`[wake] Vehicle table loaded — ${count} rows visible`);
+      return count;
+    }
+    console.log(`[wake] Table still empty (${count} rows) after attempt ${attempt}`);
+  }
+  throw new Error(`Vehicle table did not load (url=${page.url()})`);
+}
+
 /**
  * Open the bottom-left "Show: N Vehicles" menu and pick 100 per page.
- * Always re-selects the size — that is what triggers Lytx to load the vehicle table.
  */
 export async function setVehiclesPageSize(page, pageSize = 100) {
   await waitForVehiclesList(page, 60000);
@@ -208,35 +227,17 @@ export async function setVehiclesPageSize(page, pageSize = 100) {
 
   if (current === pageSize && loaded >= 10) {
     console.log(`[wake] Already showing ${pageSize} vehicles per page (${loaded} rows visible)`);
-    await waitForVehicleDataLoaded(page, 30000);
     return;
   }
 
-  if (!(await openPageSizeMenu(page))) {
-    throw new Error("Could not open Show: N Vehicles menu");
-  }
-
-  if (!(await pickPageSizeOption(page, pageSize))) {
-    throw new Error(`Could not select Show: ${pageSize} Vehicles`);
-  }
-
-  await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {});
-  await sleep(2000);
-
-  const afterCount = await waitForVehicleDataLoaded(page, 90000);
+  const count = await forceReloadVehicleTable(page, pageSize);
   const after = await readCurrentPageSize(page);
   if (after !== pageSize) {
     console.log(
       `[wake] Warning: requested ${pageSize}/page but page reports ${after ?? "unknown"} — continuing`
     );
   } else {
-    console.log(`[wake] Page size set to ${pageSize} vehicles (${afterCount} rows visible)`);
-  }
-
-  if (afterCount < 10) {
-    throw new Error(
-      `Vehicle table did not load after setting page size (only ${afterCount} rows, url=${page.url()})`
-    );
+    console.log(`[wake] Page size set to ${pageSize} vehicles (${count} rows visible)`);
   }
 }
 
@@ -427,21 +428,10 @@ export async function goToFirstPage(page) {
 }
 
 export async function refreshVehiclesList(page, appConfig = {}, wakeConfig = {}, pageSize = 100) {
-  console.log("[wake] Refreshing vehicles list (full reload)…");
-  const listUrl =
-    wakeConfig.vehiclesListUrl ||
-    appConfig.vehiclesListUrl ||
-    "https://app.lytx.com/#/lvs/vehicles";
-  await page.goto(listUrl, { waitUntil: "domcontentloaded", timeout: 90000 });
-  await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {});
-  await sleep(2000);
-  await setVehiclesPageSize(page, pageSize);
+  console.log("[wake] Refreshing vehicles table between passes…");
   await goToFirstPage(page);
-  await sleep(1000);
-  const rows = await waitForVehicleDataLoaded(page, 90000);
-  if (rows < 10) {
-    throw new Error(`Vehicle table empty after refresh (${rows} rows)`);
-  }
+  await sleep(1500);
+  const rows = await forceReloadVehicleTable(page, pageSize);
   console.log(`[wake] Refresh complete — ${rows} rows on page 1`);
 }
 
