@@ -11,6 +11,7 @@
     "coach": "node src/index.js due-for-coaching",
     "depot": "node src/index.js depot-monitor",
     "incidents": "node src/index.js incidents-monitor",
+    "wake": "node src/index.js wake-trucks",
     "dashboard": "node src/web/server.js",
     "explore": "node src/explore.js",
     "demo:server": "node demo/server.js",

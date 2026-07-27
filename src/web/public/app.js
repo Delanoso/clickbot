@@ -70,6 +70,14 @@ function renderTasks(tasks) {
         task.status?.remaining != null
           ? String(task.status.remaining)
           : task.status?.message || "—";
+    } else if (task.id === "wake-trucks") {
+      const count = task.status?.stillNotBrowseCount;
+      detail =
+        count != null
+          ? count === 0
+            ? "All Browse"
+            : `${count} not Browse`
+          : task.status?.message || "—";
     }
     panel.querySelector('[data-role="detail"]').textContent = detail;
   }

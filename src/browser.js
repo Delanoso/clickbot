@@ -67,6 +67,34 @@ export async function openLytxOnly(config) {
   return { browser, context, page };
 }
 
+/**
+ * Lytx Video Search / Vehicles account (separate login from Driver Safety).
+ */
+export async function openLytxVehicles(config) {
+  const vehicles = config.apps?.vehicles;
+  if (!vehicles?.url) {
+    throw new Error("apps.vehicles.url is required for wake-trucks");
+  }
+
+  const browser = await chromium.launch({
+    headless: Boolean(config.headless),
+    slowMo: config.slowMoMs ?? 0,
+  });
+
+  const context = await browser.newContext();
+  const page = await context.newPage();
+
+  await page.goto(vehicles.url, { waitUntil: "domcontentloaded" });
+  await maybeLogin(page, vehicles, "vehicles");
+
+  const workUrl = vehicles.workUrl || "https://app.lytx.com/";
+  if (!page.url().includes("app.lytx.com")) {
+    await page.goto(workUrl, { waitUntil: "domcontentloaded" });
+  }
+
+  return { browser, context, page };
+}
+
 const LOW_MEMORY_CHROMIUM_ARGS = [
   "--disable-dev-shm-usage",
   "--disable-gpu",

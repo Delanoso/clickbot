@@ -37,6 +37,12 @@ export const TASKS = [
     summary: "Watch trucks for depot (green) and Johannesburg (yellow) with driver comments.",
     cli: "incidents-monitor",
   },
+  {
+    id: "wake-trucks",
+    name: "Wake Trucks",
+    summary: "Lytx Video Search — Wake/Retry all vehicles, report trucks still not Browse.",
+    cli: "wake-trucks",
+  },
 ];
 
 const processes = new Map();
