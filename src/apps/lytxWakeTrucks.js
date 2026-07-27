@@ -78,12 +78,11 @@ async function isOnVehiclesList(page) {
   return page.evaluate(() => {
     const body = (document.body?.innerText || "").replace(/\s+/g, " ");
     const hasHeader = /VEHICLES/i.test(body);
-    const hasTable =
-      /\bBrowse\b/i.test(body) ||
-      /\bWake\b/i.test(body) ||
-      /Show:\s*\d+\s*Vehicle/i.test(body) ||
-      /VEHICLES\s+\d+\s*-\s*\d+\s+OF\s+\d+/i.test(body);
-    return hasHeader && hasTable;
+    const hasLoadedRange = /VEHICLES\s+\d+\s*-\s*\d+\s+OF\s+\d+/i.test(body);
+    const hasShowMenu = /Show:\s*\d+\s*Vehicle/i.test(body);
+    const rowCount = document.querySelectorAll("table tbody tr, [role='row']").length;
+    const hasDataRows = rowCount >= 10;
+    return hasHeader && hasShowMenu && (hasLoadedRange || hasDataRows);
   });
 }
 
@@ -112,27 +111,32 @@ async function readCurrentPageSize(page) {
   });
 }
 
-/**
- * Open the bottom-left "Show: N Vehicles" menu and pick 100 per page.
- */
-export async function setVehiclesPageSize(page, pageSize = 100) {
-  await waitForVehiclesList(page, 30000);
-
-  const current = await readCurrentPageSize(page);
-  if (current === pageSize) {
-    console.log(`[wake] Already showing ${pageSize} vehicles per page`);
-    await waitForVehicleRows(page, 50, 45000);
-    return;
+async function waitForVehicleDataLoaded(page, timeoutMs = 90000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const count = await countVehicleRows(page);
+    const hasRange = await page.evaluate(() =>
+      /VEHICLES\s+\d+\s*-\s*\d+\s+OF\s+\d+/i.test(document.body?.innerText || "")
+    );
+    if (count >= 10 || hasRange) return count;
+    await sleep(1000);
   }
+  return countVehicleRows(page);
+}
 
+async function countVehicleRows(page) {
+  const rows = await scanVehicleRows(page);
+  return rows.length;
+}
+
+async function openPageSizeMenu(page) {
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-  await sleep(1000);
+  await sleep(800);
 
   const opened = await page.evaluate(() => {
-    const candidates = [
-      ...document.querySelectorAll("a, button, span, div, li, label, [role='button'], [role='menuitem']"),
-    ];
-    for (const el of candidates) {
+    for (const el of document.querySelectorAll(
+      "a, button, span, div, li, label, [role='button'], [role='menuitem']"
+    )) {
       const text = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
       if (!/^show:\s*\d+\s*vehicles?$/i.test(text)) continue;
       const r = el.getBoundingClientRect();
@@ -146,26 +150,29 @@ export async function setVehiclesPageSize(page, pageSize = 100) {
   if (opened) {
     console.log(`[wake] Opened page size menu (${opened})`);
     await sleep(600);
-  } else {
-    const trigger = page
-      .locator("a, button, span, div, li")
-      .filter({ hasText: /Show:\s*\d+\s*Vehicle/i })
-      .first();
-    await trigger.waitFor({ state: "visible", timeout: 20000 });
+    return true;
+  }
+
+  const trigger = page
+    .locator("a, button, span, div, li")
+    .filter({ hasText: /Show:\s*\d+\s*Vehicle/i })
+    .first();
+  if (await trigger.isVisible().catch(() => false)) {
     await clickStable(trigger);
     console.log("[wake] Opened page size menu via locator");
     await sleep(600);
+    return true;
   }
+  return false;
+}
 
+async function pickPageSizeOption(page, pageSize) {
   const targetRe = new RegExp(`^show:\\s*${pageSize}\\s*vehicles?$`, "i");
   const picked = await page.evaluate((size) => {
     const want = new RegExp(`^show:\\s*${size}\\s*vehicles?$`, "i");
-    const items = [
-      ...document.querySelectorAll(
-        "a, button, span, div, li, [role='menuitem'], [role='option'], .dropdown-item, .menu-item"
-      ),
-    ];
-    for (const el of items) {
+    for (const el of document.querySelectorAll(
+      "a, button, span, div, li, [role='menuitem'], [role='option'], .dropdown-item, .menu-item"
+    )) {
       const text = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
       if (!want.test(text)) continue;
       el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
@@ -174,29 +181,62 @@ export async function setVehiclesPageSize(page, pageSize = 100) {
     return null;
   }, pageSize);
 
-  if (!picked) {
-    const option = page
-      .locator("a, button, span, div, li, [role='menuitem']")
-      .filter({ hasText: targetRe })
-      .first();
-    await option.waitFor({ state: "visible", timeout: 15000 });
-    await clickStable(option);
-    console.log(`[wake] Selected Show: ${pageSize} Vehicles via locator`);
-  } else {
+  if (picked) {
     console.log(`[wake] Selected ${picked}`);
+    return true;
+  }
+
+  const option = page
+    .locator("a, button, span, div, li, [role='menuitem']")
+    .filter({ hasText: targetRe })
+    .first();
+  await option.waitFor({ state: "visible", timeout: 15000 });
+  await clickStable(option);
+  console.log(`[wake] Selected Show: ${pageSize} Vehicles via locator`);
+  return true;
+}
+
+/**
+ * Open the bottom-left "Show: N Vehicles" menu and pick 100 per page.
+ * Always re-selects the size — that is what triggers Lytx to load the vehicle table.
+ */
+export async function setVehiclesPageSize(page, pageSize = 100) {
+  await waitForVehiclesList(page, 60000);
+
+  const current = await readCurrentPageSize(page);
+  const loaded = await countVehicleRows(page);
+
+  if (current === pageSize && loaded >= 10) {
+    console.log(`[wake] Already showing ${pageSize} vehicles per page (${loaded} rows visible)`);
+    await waitForVehicleDataLoaded(page, 30000);
+    return;
+  }
+
+  if (!(await openPageSizeMenu(page))) {
+    throw new Error("Could not open Show: N Vehicles menu");
+  }
+
+  if (!(await pickPageSizeOption(page, pageSize))) {
+    throw new Error(`Could not select Show: ${pageSize} Vehicles`);
   }
 
   await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {});
-  await sleep(2500);
-  await waitForVehicleRows(page, 1, 45000);
+  await sleep(2000);
 
+  const afterCount = await waitForVehicleDataLoaded(page, 90000);
   const after = await readCurrentPageSize(page);
   if (after !== pageSize) {
     console.log(
       `[wake] Warning: requested ${pageSize}/page but page reports ${after ?? "unknown"} — continuing`
     );
   } else {
-    console.log(`[wake] Page size set to ${pageSize} vehicles`);
+    console.log(`[wake] Page size set to ${pageSize} vehicles (${afterCount} rows visible)`);
+  }
+
+  if (afterCount < 10) {
+    throw new Error(
+      `Vehicle table did not load after setting page size (only ${afterCount} rows, url=${page.url()})`
+    );
   }
 }
 
@@ -387,12 +427,22 @@ export async function goToFirstPage(page) {
 }
 
 export async function refreshVehiclesList(page, appConfig = {}, wakeConfig = {}, pageSize = 100) {
-  console.log("[wake] Refreshing vehicles list and page size…");
-  await ensureVehiclesListPage(page, appConfig, wakeConfig);
+  console.log("[wake] Refreshing vehicles list (full reload)…");
+  const listUrl =
+    wakeConfig.vehiclesListUrl ||
+    appConfig.vehiclesListUrl ||
+    "https://app.lytx.com/#/lvs/vehicles";
+  await page.goto(listUrl, { waitUntil: "domcontentloaded", timeout: 90000 });
+  await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {});
+  await sleep(2000);
   await setVehiclesPageSize(page, pageSize);
   await goToFirstPage(page);
   await sleep(1000);
-  await waitForVehicleRows(page, 50, 45000);
+  const rows = await waitForVehicleDataLoaded(page, 90000);
+  if (rows < 10) {
+    throw new Error(`Vehicle table empty after refresh (${rows} rows)`);
+  }
+  console.log(`[wake] Refresh complete — ${rows} rows on page 1`);
 }
 
 async function primeVehicleTable(page) {
@@ -541,13 +591,7 @@ export async function clickWakeOrRetryForVehicle(page, vehicleId) {
 }
 
 async function waitForVehicleRows(page, minRows = 1, timeoutMs = 60000) {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    const rows = await scanVehicleRows(page);
-    if (rows.length >= minRows) return rows.length;
-    await sleep(1000);
-  }
-  const count = (await scanVehicleRows(page)).length;
+  const count = await waitForVehicleDataLoaded(page, timeoutMs);
   if (count < minRows) {
     const snippet = await page
       .evaluate(() => (document.body?.innerText || "").slice(0, 400))
@@ -562,9 +606,11 @@ async function waitForVehicleRows(page, minRows = 1, timeoutMs = 60000) {
 export async function runWakePass(page, { clickDelayMs = 1000, passNumber = 1 } = {}) {
   await goToFirstPage(page);
   await sleep(500);
-  const rowCount = await waitForVehicleRows(page, 50, 45000);
-  if (rowCount < 50) {
-    console.log(`[wake] Warning: pass ${passNumber} page 1 only has ${rowCount} rows — list may be stale`);
+  const rowCount = await waitForVehicleDataLoaded(page, 90000);
+  if (rowCount < 20) {
+    throw new Error(
+      `Pass ${passNumber} cannot run — only ${rowCount} vehicle rows visible (table not loaded)`
+    );
   }
 
   let clicked = 0;
@@ -605,7 +651,10 @@ export async function runWakePass(page, { clickDelayMs = 1000, passNumber = 1 } 
 export async function collectNotBrowseTrucks(page) {
   await goToFirstPage(page);
   await sleep(500);
-  await waitForVehicleRows(page, 50, 45000);
+  const rowCount = await waitForVehicleDataLoaded(page, 90000);
+  if (rowCount < 20) {
+    throw new Error(`Final scan cannot run — only ${rowCount} vehicle rows visible (table not loaded)`);
+  }
 
   const out = [];
   const seen = new Set();
