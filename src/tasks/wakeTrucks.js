@@ -96,8 +96,10 @@ function printRunSummary(summary) {
   if (summary.clickedVehicles.length) {
     console.log("\n=== TRUCKS WOKEN — comma-separated (copy for step 2) ===");
     console.log(summary.copyPasteCsv);
+    console.log(`\nTotal trucks woken: ${summary.totalClicks}`);
   } else {
     console.log("\n(no trucks woken this run)");
+    console.log("Total trucks woken: 0");
   }
 
   if (summary.warnings.length) {
