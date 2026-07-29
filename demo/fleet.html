@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Webfleet Drivers (demo)</title>
+    <style>
+      body {
+        font-family: Georgia, "Times New Roman", serif;
+        margin: 0;
+        min-height: 100vh;
+        padding: 1.25rem;
+        background: linear-gradient(145deg, #f3ebe2 0%, #e4eef1 50%, #dfe8dd 100%);
+        color: #243028;
+      }
+      h1 { font-size: 1.1rem; margin: 0 0 0.75rem; }
+      input { width: 16rem; box-sizing: border-box; padding: 0.55rem 0.7rem; font: inherit; margin-bottom: 1rem; }
+      table { width: 100%; max-width: 52rem; border-collapse: collapse; background: rgba(255,255,255,0.7); }
+      th, td { text-align: left; padding: 0.55rem 0.7rem; border-bottom: 1px solid #c5d0c7; }
+      th { font-size: 0.85rem; }
+    </style>
+  </head>
+  <body>
+    <h1>DRIVERS</h1>
+    <input id="search" type="search" placeholder="Search" autocomplete="off" />
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>Name</th>
+          <th>No.</th>
+          <th>Vehicle</th>
+          <th>Activity</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <script>
+      const fleet = {
+        "T-1001": { name: "Alex Rivera", no: "D1001", vehicle: "T-1001 – Alex Rivera" },
+        "T-1002": { name: "Not In Directory 083 111 2222", no: "D1002", vehicle: "T-1002 – NO DRIVER" },
+        "T-1003": { name: "N/A", no: "—", vehicle: "T-1003 – N/A" },
+      };
+
+      const search = document.getElementById("search");
+      const rows = document.getElementById("rows");
+
+      function runSearch() {
+        const q = search.value.trim().toUpperCase();
+        rows.innerHTML = "";
+        for (const [id, info] of Object.entries(fleet)) {
+          if (q && !id.includes(q) && !info.vehicle.toUpperCase().includes(q)) continue;
+          if (!q) continue;
+          const tr = document.createElement("tr");
+          tr.innerHTML = `<td></td><td>${info.name}</td><td>${info.no}</td><td>${info.vehicle}</td><td>Work</td>`;
+          rows.appendChild(tr);
+        }
+      }
+
+      search.addEventListener("input", runSearch);
+      search.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") runSearch();
+      });
+    </script>
+  </body>
+</html>

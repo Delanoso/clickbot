@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>clickbot</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="atmosphere" aria-hidden="true"></div>
+    <header class="hero">
+      <nav class="top-nav">
+        <a class="nav-link active" href="/">Home</a>
+        <a class="nav-link" href="/depot">Depot Monitor</a>
+        <a class="nav-link" href="/incidents-drivers">Incidents and Drivers</a>
+        <a class="nav-link" href="/wake-trucks">Wake Trucks</a>
+      </nav>
+      <p class="eyebrow">Personal ops console</p>
+      <h1 class="brand">clickbot</h1>
+      <p class="lede">
+        Run allocate, FYI, and coaching from here. Depot, incidents, and wake trucks have their own pages.
+      </p>
+      <div class="hero-meta">
+        <span id="hostLine">Starting…</span>
+        <span id="clockLine"></span>
+      </div>
+    </header>
+
+    <main>
+      <section class="task-rail" aria-label="Tasks">
+        <article class="task-panel" data-task="allocate-drivers">
+          <div class="task-head">
+            <h2>Allocate Drivers</h2>
+            <span class="status-dot" data-role="dot"></span>
+          </div>
+          <p class="task-copy">Assign Webfleet driver Nos into Lytx unassigned vehicles.</p>
+          <dl class="task-stats">
+            <div><dt>State</dt><dd data-role="state">idle</dd></div>
+            <div><dt>Last</dt><dd data-role="detail">—</dd></div>
+          </dl>
+          <div class="task-actions">
+            <button type="button" class="btn primary" data-action="start">Start</button>
+            <button type="button" class="btn" data-action="stop">Stop</button>
+          </div>
+        </article>
+
+        <article class="task-panel" data-task="fyi-notify">
+          <div class="task-head">
+            <h2>FYI Notify</h2>
+            <span class="status-dot" data-role="dot"></span>
+          </div>
+          <p class="task-copy">Clear the Lytx FYI queue with Preview → Resolve → Confirm.</p>
+          <dl class="task-stats">
+            <div><dt>State</dt><dd data-role="state">idle</dd></div>
+            <div><dt>Remaining</dt><dd data-role="detail">—</dd></div>
+          </dl>
+          <div class="task-actions">
+            <button type="button" class="btn primary" data-action="start">Start</button>
+            <button type="button" class="btn" data-action="stop">Stop</button>
+          </div>
+        </article>
+
+        <article class="task-panel" data-task="due-for-coaching">
+          <div class="task-head">
+            <h2>Due for Coaching</h2>
+            <span class="status-dot" data-role="dot"></span>
+          </div>
+          <p class="task-copy">
+            Open Due for Coaching, play each event clip, then Complete Session.
+          </p>
+          <dl class="task-stats">
+            <div><dt>State</dt><dd data-role="state">idle</dd></div>
+            <div><dt>Remaining</dt><dd data-role="detail">—</dd></div>
+          </dl>
+          <div class="task-actions">
+            <button type="button" class="btn primary" data-action="start">Start</button>
+            <button type="button" class="btn" data-action="stop">Stop</button>
+          </div>
+        </article>
+
+        <article class="task-panel task-panel-link">
+          <div class="task-head">
+            <h2>Wake Trucks</h2>
+            <span class="status-dot" id="wakeDot"></span>
+          </div>
+          <p class="task-copy">
+            Stage 1 wake pass and Stage 2 on a dedicated page.
+          </p>
+          <dl class="task-stats">
+            <div><dt>State</dt><dd id="wakeState">idle</dd></div>
+            <div><dt>Woken</dt><dd id="wakeDetail">—</dd></div>
+          </dl>
+          <div class="task-actions">
+            <a class="btn primary" href="/wake-trucks">Open Wake Trucks</a>
+          </div>
+        </article>
+
+        <article class="task-panel task-panel-link">
+          <div class="task-head">
+            <h2>Depot Monitor</h2>
+            <span class="status-dot" id="depotDot"></span>
+          </div>
+          <p class="task-copy">
+            Boksburg live board, alerts, and truck watch list on a dedicated page.
+          </p>
+          <dl class="task-stats">
+            <div><dt>State</dt><dd id="depotState">idle</dd></div>
+            <div><dt>In depot</dt><dd id="depotDetail">—</dd></div>
+          </dl>
+          <div class="task-actions">
+            <a class="btn primary" href="/depot">Open depot page</a>
+          </div>
+        </article>
+      </section>
+
+      <section class="log-board" aria-label="Task log">
+        <div class="section-head">
+          <div>
+            <h2>Activity</h2>
+            <p>Latest lines from allocate, FYI, or coaching.</p>
+          </div>
+          <div class="log-tabs" id="logTabs"></div>
+        </div>
+        <pre id="logView" class="log-view">Select a task to view logs.</pre>
+      </section>
+    </main>
+
+    <script type="module" src="/app.js?v=20260727b"></script>
+  </body>
+</html>

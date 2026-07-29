@@ -1,0 +1,187 @@
+{
+  "headless": false,
+  "slowMoMs": 100,
+  "defaultDriverName": "Driver Unknown",
+  "loop": {
+    "enabled": true,
+    "delayBetweenRunsMs": 2000,
+    "maxRuns": 0
+  },
+  "depotMonitor": {
+    "pollIntervalMs": 60000,
+    "alertOnInitialMatch": true,
+    "targetArea": "N Boundary Road, Boksburg 1459, ZA",
+    "targetAreas": [
+      "N Boundary Road, Boksburg 1459, ZA",
+      "N Boundary Road, Boksburg",
+      "HFR - Boksburg Depot",
+      "Boksburg Depot",
+      "North Boundary Road, Salfin, Boksburg",
+      "Windmill Park, Boksburg 1459, ZA",
+      "Insingizi, Boksburg, 1459, ZA",
+      "Insingizi, Boksburg 1459, ZA",
+      "Insingizi, Boksburg",
+      "Insingizi"
+    ],
+    "trucks": [],
+    "workUrl": "https://live-wf.webfleet.com/web/map",
+    "searchDelayMs": 1500,
+    "resultDelayMs": 1000,
+    "selectors": {
+      "searchInput": "input.t3sel-object-filter-bar-item-search",
+      "resultItem": null,
+      "locationText": null,
+      "detailText": null,
+      "resultRow": null,
+      "vehicleColumnName": "Vehicle",
+      "locationColumnName": "Location",
+      "locationColumnIndex": null
+    }
+  },
+  "incidentsDrivers": {
+    "pollIntervalMs": 60000,
+    "trucks": []
+  },
+  "wakeTrucks": {
+    "pageSize": 100,
+    "clickDelayMs": 1000
+  },
+  "apps": {
+    "dispatch": {
+      "url": "https://login.lytx.com",
+      "workUrl": "https://app.lytx.com/#/driver-safety/tasks/assigndriver",
+      "login": {
+        "enabled": true,
+        "manual": true,
+        "usernameEnv": "LYTX_USERNAME",
+        "passwordEnv": "LYTX_PASSWORD",
+        "usernameSelector": "#username",
+        "passwordSelector": "#password",
+        "submitSelector": "#submit-button",
+        "rememberMeSelector": "#remember-me-input",
+        "successUrlPattern": "app\\.lytx\\.com|^(?!.*login\\.lytx\\.com).+",
+        "timeoutMs": 300000
+      },
+      "selectors": {
+        "pageReady": {
+          "text": "ASSIGN DRIVERS"
+        },
+        "vehicleSearchInput": {
+          "placeholder": "Search Vehicle Name"
+        },
+        "selectAllCheckbox": ".cdk-header-row input[type=\"checkbox\"]",
+        "assignSelectedButton": {
+          "role": "button",
+          "name": "Assign Selected"
+        },
+        "rowAssignButton": {
+          "role": "button",
+          "name": "Assign",
+          "exact": true
+        },
+        "driverNameInput": {
+          "placeholder": "Search Name or ID"
+        },
+        "assignConfirmButton": {
+          "role": "button",
+          "name": "Assign",
+          "exact": true
+        },
+        "openAssignTile": {
+          "text": "UNASSIGNED DRIVERS"
+        },
+        "vehicleColumn": ".cdk-row.lytx-table-row .cdk-column-Vehicle",
+        "vehicleSearchType": "[data-test-id=\"dropdown-select-span\"]",
+        "vehicleSearchTypeOption": "[data-test-id=\"common-dropDownList-item-0\"]"
+      },
+      "fyi": {
+        "selectors": {
+          "openTile": {
+            "text": "FYI NOTIFY"
+          },
+          "previewButton": {
+            "role": "button",
+            "name": "Preview"
+          },
+          "resolveButton": {
+            "role": "button",
+            "name": "Resolve",
+            "exact": true
+          },
+          "confirmButton": {
+            "role": "button",
+            "name": "Yes, Confirm"
+          }
+        }
+      },
+      "coaching": {
+        "workUrl": "https://app.lytx.com/#/driver-safety/tasks/dueforcoaching",
+        "selectors": {
+          "openTile": {
+            "text": "DUE FOR COACHING"
+          },
+          "minPlayMs": 1200,
+          "thumbWaitMs": 2000,
+          "maxPlayPasses": 4
+        }
+      }
+    },
+    "vehicles": {
+      "url": "https://dc.lytx.com/",
+      "workUrl": "https://app.lytx.com/",
+      "vehiclesListUrl": "https://app.lytx.com/#/lvs/vehicles",
+      "login": {
+        "enabled": true,
+        "manual": false,
+        "usernameEnv": "LYTX_VEHICLES_USERNAME",
+        "passwordEnv": "LYTX_VEHICLES_PASSWORD",
+        "usernameSelector": "#username",
+        "passwordSelector": "#password",
+        "submitSelector": "#submit-button",
+        "rememberMeSelector": "#remember-me-input",
+        "successUrlPattern": "app\\.lytx\\.com|dc\\.lytx\\.com|^(?!.*login\\.lytx\\.com).+",
+        "timeoutMs": 300000
+      }
+    },
+    "fleet": {
+      "url": "https://login.webfleet.com/auth/realms/webfleet/protocol/openid-connect/auth?response_type=code&client_id=atlantis&redirect_uri=https%3A%2F%2Flive-wf.webfleet.com%2Flogin%3FlogoutRedirect%3Dhttps%253A%252F%252Flive-wf.webfleet.com%252Fweb%252Fmap&state=3%28x0%2F%21%7E&scope=openid&brand_id=webfleet",
+      "workUrl": "https://live-wf.webfleet.com/web/drivers/list",
+      "login": {
+        "enabled": true,
+        "manual": true,
+        "accountEnv": "WEBFLEET_ACCOUNT",
+        "usernameEnv": "WEBFLEET_USERNAME",
+        "passwordEnv": "WEBFLEET_PASSWORD",
+        "accountSelector": "#accountname",
+        "usernameSelector": "#useraccount",
+        "passwordSelector": "#password",
+        "submitSelector": "#submit_btn",
+        "rememberMeSelector": "#rememberMe",
+        "cookieAcceptSelector": "#wi-CookieConsent_Accept",
+        "successUrlPattern": "live-wf\\.webfleet\\.com",
+        "timeoutMs": 300000
+      },
+      "selectors": {
+        "searchInput": {
+          "placeholder": "Search"
+        }
+      }
+    }
+  },
+  "validation": {
+    "minNameLength": 2,
+    "invalidNames": [
+      "",
+      "n/a",
+      "na",
+      "null",
+      "undefined",
+      "-",
+      "--",
+      "driver",
+      "no driver",
+      "none",
+      "unknown"
+    ]
+  }
+}
