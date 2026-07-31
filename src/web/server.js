@@ -459,12 +459,37 @@ async function handleApi(req, res, url) {
 
   if (req.method === "GET" && url.pathname === "/api/incidents") {
     const config = readIncidentsConfig(CONFIG_PATH);
+    const task = getTask("incidents-monitor");
+    // Avoid shipping duplicate truck/alert arrays inside task.status —
+    // the page already gets them from `incidents`. Large duplicate JSON
+    // + frequent DOM rebuilds has crashed Safari/iPad on this page.
+    const slimTask = task
+      ? {
+          ...task,
+          status: task.status
+            ? {
+                taskId: task.status.taskId,
+                updatedAt: task.status.updatedAt,
+                state: task.status.state,
+                message: task.status.message,
+                watchedCount: task.status.watchedCount,
+                checkedCount: task.status.checkedCount,
+                pollIntervalMs: task.status.pollIntervalMs,
+                cycle: task.status.cycle,
+                cycleComplete: task.status.cycleComplete,
+                inDepotCount: task.status.inDepotCount,
+                inJohannesburgCount: task.status.inJohannesburgCount,
+                exitCode: task.status.exitCode,
+              }
+            : null,
+        }
+      : null;
     return sendJson(res, 200, {
       incidents: getIncidentsSnapshot(),
       trucks: config.trucks,
       pollIntervalMs: config.pollIntervalMs,
       johannesburg: getJohannesburgCoverageSummary(),
-      task: getTask("incidents-monitor"),
+      task: slimTask,
     });
   }
 

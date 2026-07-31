@@ -52,6 +52,24 @@ body {
   animation: drift 28s linear infinite;
 }
 
+/* iPad/Safari WebKit can GPU-crash ("A problem repeatedly occurred") with
+   continuous animated layers + backdrop-filter + frequent DOM refreshes. */
+@media (hover: none), (prefers-reduced-motion: reduce) {
+  .atmosphere::after,
+  .status-dot.running,
+  .hero,
+  .task-panel,
+  .log-board,
+  .truck-manager,
+  .zone-boards {
+    animation: none !important;
+  }
+
+  .task-panel {
+    backdrop-filter: none;
+  }
+}
+
 @keyframes drift {
   from {
     transform: translateY(0);

@@ -26,6 +26,9 @@ const stopBtn = document.getElementById("stopBtn");
 const exportBtn = document.getElementById("exportBtn");
 
 let refreshGeneration = 0;
+let refreshInFlight = false;
+let lastLogRefreshAt = 0;
+const LOG_REFRESH_MS = 12000;
 const removingTrucks = new Set();
 const commentTimers = new Map();
 /** In-progress comment text keyed by truck id — survives poll refreshes. */
@@ -480,55 +483,74 @@ async function refreshLogs() {
 }
 
 async function refresh({ force = false } = {}) {
+  // Safari/iPad can crash ("A problem repeatedly occurred") when overlapping
+  // polls rebuild large DOM sections while GPU CSS animations are running.
+  if (refreshInFlight && !force) return;
+  if (document.hidden && !force) return;
+
+  refreshInFlight = true;
   const gen = force ? ++refreshGeneration : refreshGeneration;
   syncPendingFromDom();
 
-  const [healthRes, incidentsRes] = await Promise.all([
-    fetch("/api/health"),
-    fetch("/api/incidents"),
-  ]);
-  if (gen !== refreshGeneration) return;
+  try {
+    const [healthRes, incidentsRes] = await Promise.all([
+      fetch("/api/health"),
+      fetch("/api/incidents"),
+    ]);
+    if (gen !== refreshGeneration) return;
 
-  const health = await healthRes.json();
-  const payload = await incidentsRes.json();
-  const ip = health.addresses?.[0] || "127.0.0.1";
-  const location = window.location;
-  hostLine.textContent = `http://${ip}${location.port ? `:${location.port}` : ""}/incidents-drivers`;
-  clockLine.textContent = new Date().toLocaleString();
+    const health = await healthRes.json();
+    const payload = await incidentsRes.json();
+    const ip = health.addresses?.[0] || "127.0.0.1";
+    const location = window.location;
+    hostLine.textContent = `http://${ip}${location.port ? `:${location.port}` : ""}/incidents-drivers`;
+    clockLine.textContent = new Date().toLocaleString();
 
-  // Keep any in-progress comment text over the server copy.
-  latestConfiguredTrucks = mergePendingComments(payload.trucks || []);
-  latestIncidents = payload.incidents || null;
-  latestLiveRows = payload.incidents?.trucks || [];
+    // Keep any in-progress comment text over the server copy.
+    latestConfiguredTrucks = mergePendingComments(payload.trucks || []);
+    latestIncidents = payload.incidents || null;
+    latestLiveRows = payload.incidents?.trucks || [];
 
-  // Drop pending entries that now match the server and are not focused.
-  const focused = focusedCommentTruck();
-  for (const truck of latestConfiguredTrucks) {
-    if (!pendingComments.has(truck.id)) continue;
-    if (truck.id === focused) continue;
-    if (pendingComments.get(truck.id) === (truck.comment || "")) {
-      pendingComments.delete(truck.id);
+    // Drop pending entries that now match the server and are not focused.
+    const focused = focusedCommentTruck();
+    for (const truck of latestConfiguredTrucks) {
+      if (!pendingComments.has(truck.id)) continue;
+      if (truck.id === focused) continue;
+      if (pendingComments.get(truck.id) === (truck.comment || "")) {
+        pendingComments.delete(truck.id);
+      }
     }
-  }
 
-  if (payload.johannesburg) {
-    coverageNote.textContent = `Latest monitor lines · CoJ coverage: ${payload.johannesburg.suburbCount} suburbs, ${payload.johannesburg.postalCodeCount} postal codes.`;
-  }
+    if (payload.johannesburg) {
+      coverageNote.textContent = `Latest monitor lines · CoJ coverage: ${payload.johannesburg.suburbCount} suburbs, ${payload.johannesburg.postalCodeCount} postal codes.`;
+    }
 
-  renderTask(payload.task);
-  // Force watch-list rebuild only for explicit user actions (add/remove), never while typing.
-  renderFromCache({ forceWatchList: force && !focusedCommentTruck() });
-  if (!focusedCommentTruck()) {
-    await refreshLogs();
+    renderTask(payload.task);
+    // Force watch-list rebuild only for explicit user actions (add/remove), never while typing.
+    renderFromCache({ forceWatchList: force && !focusedCommentTruck() });
+
+    const now = Date.now();
+    if (!focusedCommentTruck() && (force || now - lastLogRefreshAt >= LOG_REFRESH_MS)) {
+      lastLogRefreshAt = now;
+      await refreshLogs();
+    }
+  } catch (error) {
+    incidentsMessage.textContent = error.message || String(error);
+  } finally {
+    refreshInFlight = false;
   }
 }
 
 setInterval(() => {
-  clockLine.textContent = new Date().toLocaleString();
+  if (!document.hidden) clockLine.textContent = new Date().toLocaleString();
 }, 1000);
 
 setInterval(() => {
   void refresh();
 }, 4000);
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) void refresh();
+});
 
 void refresh({ force: true });
