@@ -1,0 +1,97 @@
+@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap');
+
+:root {
+  --font-display: 'Syne', sans-serif;
+  --font-body: 'Figtree', sans-serif;
+  --lime: #b8e046;
+  --sand: #e8f2e9;
+  --mist: #9bb5b0;
+  --ink: #0a2e2b;
+  --teal: #2a8f7f;
+  color-scheme: dark;
+  font-family: var(--font-body);
+  line-height: 1.45;
+  font-weight: 400;
+  color: var(--sand);
+  background: var(--ink);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  min-width: 320px;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.btn {
+  appearance: none;
+  border: none;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.92rem;
+  padding: 0.7rem 1.1rem;
+  border-radius: 0.4rem;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s, filter 0.15s, background 0.15s;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn.primary {
+  background: var(--lime);
+  color: var(--ink);
+}
+
+.btn.secondary {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--sand);
+  border: 1px solid rgba(184, 224, 70, 0.25);
+}
+
+.btn.ghost {
+  background: transparent;
+  color: var(--mist);
+  border: 1px solid rgba(184, 224, 70, 0.2);
+}
+
+.btn.ghost.danger,
+.btn.danger {
+  color: #ffb0b0;
+  border-color: rgba(255, 120, 120, 0.35);
+}
+
+a {
+  color: var(--lime);
+}

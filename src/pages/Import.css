@@ -1,0 +1,89 @@
+.import-panel {
+  display: grid;
+  gap: 0.85rem;
+  margin-bottom: 2rem;
+}
+
+.mode-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.dropzone {
+  border: 1.5px dashed rgba(184, 224, 70, 0.35);
+  border-radius: 0.6rem;
+  padding: 2rem 1rem;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.18);
+  display: grid;
+  gap: 0.75rem;
+  justify-items: center;
+}
+
+.dropzone p {
+  margin: 0;
+  color: var(--mist);
+}
+
+.field-label {
+  font-size: 0.85rem;
+  color: var(--mist);
+}
+
+.textarea {
+  width: 100%;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.import-result {
+  padding: 0.85rem 1rem;
+  border-radius: 0.45rem;
+  background: rgba(184, 224, 70, 0.1);
+  border: 1px solid rgba(184, 224, 70, 0.25);
+  color: var(--sand);
+}
+
+.import-result p {
+  margin: 0;
+}
+
+.import-result ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+  color: var(--mist);
+  font-size: 0.85rem;
+}
+
+.format-help h2 {
+  margin: 0 0 0.5rem;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  color: var(--sand);
+}
+
+.format-help p {
+  color: var(--mist);
+  line-height: 1.5;
+}
+
+.format-help code {
+  font-size: 0.85em;
+  color: var(--lime);
+  background: rgba(0, 0, 0, 0.25);
+  padding: 0.1rem 0.3rem;
+  border-radius: 0.2rem;
+}
+
+.format-help .hint {
+  font-size: 0.9rem;
+}

@@ -1,0 +1,53 @@
+.filter-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+.filter-tab {
+  appearance: none;
+  border: 1px solid rgba(184, 224, 70, 0.2);
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--mist);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.45rem 0.7rem;
+  border-radius: 0.35rem;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.filter-tab span {
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+
+.filter-tab.active {
+  background: var(--lime);
+  color: var(--ink);
+  border-color: var(--lime);
+}
+
+.legend {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 1.25rem;
+  padding: 0.9rem 0;
+  border-top: 1px solid rgba(184, 224, 70, 0.1);
+  border-bottom: 1px solid rgba(184, 224, 70, 0.1);
+}
+
+.legend p {
+  margin: 0;
+  color: var(--mist);
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.legend strong {
+  color: var(--sand);
+}
