@@ -24,6 +24,10 @@ const startAllBtn = document.getElementById("startAllBtn");
 const stopAllBtn = document.getElementById("stopAllBtn");
 const exportBtn = document.getElementById("exportBtn");
 const exportReason = document.getElementById("exportReason");
+const watchList = document.getElementById("watchList");
+
+const removingTrucks = new Set();
+let latestTrucks = [];
 
 function updateExportLink() {
   if (!exportBtn || !exportReason) return;
@@ -34,6 +38,62 @@ function updateExportLink() {
 exportReason?.addEventListener("change", updateExportLink);
 exportBtn?.addEventListener("click", updateExportLink);
 updateExportLink();
+
+watchList?.addEventListener("click", (event) => {
+  const btn = event.target.closest("[data-remove]");
+  if (!btn || !watchList.contains(btn)) return;
+  event.preventDefault();
+  void removeTruck(btn.getAttribute("data-remove"), btn.getAttribute("data-reason"));
+});
+
+async function removeTruck(truck, reason) {
+  const id = String(truck || "").trim();
+  const key = `${String(reason || "").toLowerCase()}:${id.toUpperCase()}`;
+  if (!id || !reason || removingTrucks.has(key)) return;
+  removingTrucks.add(key);
+  truckFormNote.textContent = `Removing ${id} from ${REASON_META[reason]?.label || reason}…`;
+
+  try {
+    const res = await fetch(
+      `/api/tracking/trucks/${encodeURIComponent(id)}?reason=${encodeURIComponent(reason)}`,
+      { method: "DELETE", headers: { "Content-Type": "application/json" }, body: "{}" }
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `Could not remove ${id}`);
+    truckFormNote.textContent = data.removed
+      ? `Removed ${id} from ${REASON_META[reason]?.short || reason}`
+      : `${id} was not on the ${REASON_META[reason]?.short || reason} list`;
+    await refresh();
+  } catch (error) {
+    truckFormNote.textContent = error.message || String(error);
+  } finally {
+    removingTrucks.delete(key);
+  }
+}
+
+function renderWatchList(trucks) {
+  if (!watchList) return;
+  if (!trucks.length) {
+    watchList.innerHTML = `<p class="empty-note">No trucks tracked yet. Add one above.</p>`;
+    return;
+  }
+  watchList.innerHTML = trucks
+    .map((entry) => {
+      const reason = entry.reason || "";
+      const meta = REASON_META[reason] || {};
+      const busy = removingTrucks.has(`${reason}:${String(entry.id).toUpperCase()}`);
+      const driver = entry.driver ? escapeHtml(entry.driver) : "Driver pending";
+      const comment = entry.comment ? ` · ${escapeHtml(entry.comment)}` : "";
+      return `<div class="watch-row">
+        <div>
+          <strong>${escapeHtml(entry.id)}</strong> ${reasonBadgeHtml(reason)}
+          <span>${driver}${comment}</span>
+        </div>
+        <button type="button" class="btn danger-btn" data-remove="${escapeHtml(entry.id)}" data-reason="${escapeHtml(reason)}" ${busy ? "disabled" : ""}>Remove</button>
+      </div>`;
+    })
+    .join("");
+}
 
 function formatTime(value) {
   if (!value) return "—";
@@ -180,6 +240,8 @@ async function refresh() {
   renderTasks(payload.tasks);
   renderBoards(payload.live);
   renderCounts(payload.counts, payload.trucks);
+  latestTrucks = payload.trucks || [];
+  renderWatchList(latestTrucks);
 }
 
 addTruckForm.addEventListener("submit", async (event) => {

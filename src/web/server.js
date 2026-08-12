@@ -931,6 +931,40 @@ async function handleApi(req, res, url) {
     });
   }
 
+  const trackingTruckMatch = url.pathname.match(/^\/api\/tracking\/trucks\/([^/]+)$/);
+  if (trackingTruckMatch && req.method === "DELETE") {
+    const truck = decodeURIComponent(trackingTruckMatch[1]);
+    const body = await readBody(req).catch(() => ({}));
+    const reason = normalizeReason(body.reason || url.searchParams.get("reason"));
+    if (!reason) {
+      return sendJson(res, 400, {
+        error: "reason is required: ppe | incident | camera",
+      });
+    }
+
+    if (reason === "ppe") {
+      cancelDriverLookup(truck);
+      const result = removeDepotTruck(truck, CONFIG_PATH);
+      const restart =
+        body.restart === false ? { restarted: false } : restartDepotIfRunning();
+      return sendJson(res, 200, { ...result, reason, reasonLabel: reasonLabel(reason), ...restart });
+    }
+
+    if (reason === "incident") {
+      cancelIncidentsDriverLookup(truck);
+      const result = removeIncidentsTruck(truck, CONFIG_PATH);
+      const restart =
+        body.restart === false ? { restarted: false } : restartIncidentsIfRunning();
+      return sendJson(res, 200, { ...result, reason, reasonLabel: reasonLabel(reason), ...restart });
+    }
+
+    cancelCameraDriverLookup(truck);
+    const result = removeCameraTruck(truck, CONFIG_PATH);
+    const restart =
+      body.restart === false ? { restarted: false } : restartCameraIfRunning();
+    return sendJson(res, 200, { ...result, reason, reasonLabel: reasonLabel(reason), ...restart });
+  }
+
   if (req.method === "POST" && url.pathname === "/api/tracking/start-all") {
     const results = {};
     for (const taskId of ["depot-monitor", "incidents-monitor", "camera-monitor"]) {
