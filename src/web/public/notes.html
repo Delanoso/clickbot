@@ -80,7 +80,7 @@
               </div>
               <div class="task-actions">
                 <button type="button" class="btn" id="cancelEditBtn">Cancel</button>
-                <button type="button" class="btn primary" id="saveNoteBtn">Save</button>
+                <button type="submit" class="btn primary" id="saveNoteBtn" form="noteForm">Save</button>
               </div>
             </div>
             <form id="noteForm" class="note-form">
@@ -116,6 +116,9 @@
                 placeholder="Write your note here…"
               ></textarea>
               <p id="noteFormNote" class="form-note"></p>
+              <div class="task-actions">
+                <button type="submit" class="btn primary" id="saveNoteBtnBottom">Save note</button>
+              </div>
             </form>
           </section>
 
@@ -132,6 +135,6 @@
       </section>
     </main>
 
-    <script type="module" src="/notes.js?v=20260812a"></script>
+    <script type="module" src="/notes.js?v=20260812b"></script>
   </body>
 </html>
