@@ -10,6 +10,7 @@ import { normalizeReason, reasonLabel } from "./trackingReasons.js";
 
 const HEADER = [
   "Truck",
+  "Device",
   "Driver",
   "Comment",
   "Reason",
@@ -50,6 +51,7 @@ function exportRow(truck, live, reasonText) {
     (inDepot ? "depot" : live.inJohannesburg ? "johannesburg" : "other");
   return [
     truck.id,
+    truck.device || "",
     truck.driver || "",
     truck.comment || "",
     reasonText,

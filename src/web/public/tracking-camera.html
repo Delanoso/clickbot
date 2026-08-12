@@ -111,6 +111,15 @@
             />
             <button type="submit" class="btn primary">Add for camera</button>
           </div>
+          <label for="deviceInput">Lytx device number</label>
+          <input
+            id="deviceInput"
+            name="device"
+            type="text"
+            placeholder="e.g. MV00095227"
+            autocomplete="off"
+            spellcheck="false"
+          />
           <p id="truckFormNote" class="form-note"></p>
         </form>
 
@@ -120,7 +129,7 @@
             <input
               id="watchSearchInput"
               type="search"
-              placeholder="Truck, driver, or comment…"
+              placeholder="Truck, device, driver, or comment…"
               autocomplete="off"
               spellcheck="false"
             />
@@ -143,6 +152,6 @@
       </section>
     </main>
 
-    <script type="module" src="/tracking-camera.js?v=20260812a"></script>
+    <script type="module" src="/tracking-camera.js?v=20260812c"></script>
   </body>
 </html>

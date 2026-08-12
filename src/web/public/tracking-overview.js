@@ -83,11 +83,12 @@ function renderWatchList(trucks) {
       const meta = REASON_META[reason] || {};
       const busy = removingTrucks.has(`${reason}:${String(entry.id).toUpperCase()}`);
       const driver = entry.driver ? escapeHtml(entry.driver) : "Driver pending";
+      const device = entry.device ? ` · Device ${escapeHtml(entry.device)}` : "";
       const comment = entry.comment ? ` · ${escapeHtml(entry.comment)}` : "";
       return `<div class="watch-row">
         <div>
           <strong>${escapeHtml(entry.id)}</strong> ${reasonBadgeHtml(reason)}
-          <span>${driver}${comment}</span>
+          <span>${driver}${device}${comment}</span>
         </div>
         <button type="button" class="btn danger-btn" data-remove="${escapeHtml(entry.id)}" data-reason="${escapeHtml(reason)}" ${busy ? "disabled" : ""}>Remove</button>
       </div>`;

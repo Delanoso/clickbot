@@ -84,11 +84,12 @@ export function normalizeCameraTruckEntry(value) {
       id,
       driver: String(value.driver || value.driverName || "").trim(),
       comment: String(value.comment || "").trim(),
+      device: String(value.device || value.deviceNumber || "").trim(),
     };
   }
   const id = normalizeTruckId(value);
   if (!id) return null;
-  return { id, driver: "", comment: "" };
+  return { id, driver: "", comment: "", device: "" };
 }
 
 export function normalizeCameraTruckEntries(list) {
@@ -143,12 +144,13 @@ function saveTruckEntries(current, trucks) {
 
 export function addCameraTruck(
   truckNumber,
-  { driver = "", comment = "", configPath = DEFAULT_CONFIG } = {}
+  { driver = "", comment = "", device = "", configPath = DEFAULT_CONFIG } = {}
 ) {
   const truck = normalizeTruckId(truckNumber);
   if (!truck) throw new Error("Truck number is required");
   const driverName = String(driver || "").trim();
   const commentText = String(comment || "").trim();
+  const deviceNumber = String(device || "").trim();
 
   return withConfigLock(configPath, () => {
     const current = readCameraConfig(configPath);
@@ -163,6 +165,10 @@ export function addCameraTruck(
         existing.comment = commentText;
         updated = true;
       }
+      if (deviceNumber && existing.device !== deviceNumber) {
+        existing.device = deviceNumber;
+        updated = true;
+      }
       if (updated) saveTruckEntries(current, current.trucks);
       return {
         trucks: current.trucks,
@@ -171,12 +177,13 @@ export function addCameraTruck(
         truck,
         driver: existing.driver || "",
         comment: existing.comment || "",
+        device: existing.device || "",
       };
     }
 
     const trucks = [
       ...current.trucks,
-      { id: truck, driver: driverName, comment: commentText },
+      { id: truck, driver: driverName, comment: commentText, device: deviceNumber },
     ];
     saveTruckEntries(current, trucks);
     return {
@@ -186,6 +193,7 @@ export function addCameraTruck(
       truck,
       driver: driverName,
       comment: commentText,
+      device: deviceNumber,
     };
   });
 }
@@ -253,16 +261,44 @@ export function setCameraTruckComment(
   });
 }
 
+export function setCameraTruckDevice(
+  truckNumber,
+  device,
+  configPath = DEFAULT_CONFIG
+) {
+  const truck = normalizeTruckId(truckNumber);
+  if (!truck) throw new Error("Truck number is required");
+
+  return withConfigLock(configPath, () => {
+    const current = readCameraConfig(configPath);
+    const existing = current.trucks.find((entry) => entry.id === truck);
+    if (!existing) {
+      return { updated: false, truck, device: "", missing: true };
+    }
+    const deviceNumber = String(device || "").trim();
+    if (existing.device === deviceNumber) {
+      return { updated: false, truck, device: existing.device, missing: false };
+    }
+    existing.device = deviceNumber;
+    saveTruckEntries(current, current.trucks);
+    return { updated: true, truck, device: deviceNumber, missing: false };
+  });
+}
+
 export function setCameraTrucks(truckNumbers, configPath = DEFAULT_CONFIG) {
   return withConfigLock(configPath, () => {
     const current = readCameraConfig(configPath);
     const previous = new Map(
-      current.trucks.map((entry) => [entry.id, { driver: entry.driver, comment: entry.comment }])
+      current.trucks.map((entry) => [
+        entry.id,
+        { driver: entry.driver, comment: entry.comment, device: entry.device },
+      ])
     );
     const trucks = normalizeCameraTruckEntries(truckNumbers).map((entry) => ({
       id: entry.id,
       driver: entry.driver || previous.get(entry.id)?.driver || "",
       comment: entry.comment || previous.get(entry.id)?.comment || "",
+      device: entry.device || previous.get(entry.id)?.device || "",
     }));
     saveTruckEntries(current, trucks);
     return { trucks };

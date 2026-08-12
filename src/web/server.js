@@ -49,6 +49,7 @@ import {
   readCameraConfig,
   removeCameraTruck,
   setCameraTruckComment,
+  setCameraTruckDevice,
   setCameraTruckDriver,
   setCameraTrucks,
 } from "./cameraConfig.js";
@@ -704,10 +705,12 @@ async function handleApi(req, res, url) {
       const truck = body.truck || body.truckNumber;
       const providedDriver = String(body.driver || "").trim();
       const providedComment = String(body.comment || "").trim();
+      const providedDevice = String(body.device || body.deviceNumber || "").trim();
 
       const result = addCameraTruck(truck, {
         driver: providedDriver,
         comment: providedComment,
+        device: providedDevice,
         configPath: CONFIG_PATH,
       });
       const restart =
@@ -737,7 +740,7 @@ async function handleApi(req, res, url) {
   }
 
   const cameraTruckMatch = url.pathname.match(
-    /^\/api\/camera\/trucks\/([^/]+)(?:\/(comment))?$/
+    /^\/api\/camera\/trucks\/([^/]+)(?:\/(comment|device))?$/
   );
   if (cameraTruckMatch) {
     const truck = decodeURIComponent(cameraTruckMatch[1]);
@@ -758,11 +761,19 @@ async function handleApi(req, res, url) {
         const result = setCameraTruckComment(truck, body.comment ?? "", CONFIG_PATH);
         return sendJson(res, 200, result);
       }
+      if (sub === "device" || body.device != null || body.deviceNumber != null) {
+        const result = setCameraTruckDevice(
+          truck,
+          body.device ?? body.deviceNumber ?? "",
+          CONFIG_PATH
+        );
+        return sendJson(res, 200, result);
+      }
       if (body.driver != null) {
         const result = setCameraTruckDriver(truck, body.driver, CONFIG_PATH);
         return sendJson(res, 200, result);
       }
-      return sendJson(res, 400, { error: "Provide comment or driver to update" });
+      return sendJson(res, 400, { error: "Provide comment, device, or driver to update" });
     }
   }
 
@@ -915,6 +926,7 @@ async function handleApi(req, res, url) {
     const result = addCameraTruck(truck, {
       driver: providedDriver,
       comment: providedComment,
+      device: String(body.device || body.deviceNumber || "").trim(),
       configPath: CONFIG_PATH,
     });
     const restart =

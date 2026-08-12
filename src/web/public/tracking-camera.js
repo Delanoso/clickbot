@@ -19,6 +19,7 @@ const truckCount = document.getElementById("truckCount");
 const truckFormNote = document.getElementById("truckFormNote");
 const addTruckForm = document.getElementById("addTruckForm");
 const truckInput = document.getElementById("truckInput");
+const deviceInput = document.getElementById("deviceInput");
 const watchSearchInput = document.getElementById("watchSearchInput");
 const watchSearchClear = document.getElementById("watchSearchClear");
 const watchSearchNote = document.getElementById("watchSearchNote");
@@ -31,8 +32,10 @@ const exportBtn = document.getElementById("exportBtn");
 let refreshGeneration = 0;
 const removingTrucks = new Set();
 const commentTimers = new Map();
+const deviceTimers = new Map();
 /** In-progress comment text keyed by truck id — survives poll refreshes. */
 const pendingComments = new Map();
+const pendingDevices = new Map();
 let latestConfiguredTrucks = [];
 let latestLiveRows = [];
 let latestCamera = null;
@@ -53,45 +56,87 @@ watchList.addEventListener("click", (event) => {
 });
 
 watchList.addEventListener("input", (event) => {
-  const field = event.target.closest("[data-comment]");
-  if (!field || !watchList.contains(field)) return;
-  const truck = field.getAttribute("data-comment");
-  const value = field.value;
-  pendingComments.set(truck, value);
-  const existing = latestConfiguredTrucks.find((t) => t.id === truck);
-  if (existing) existing.comment = value;
+  const commentField = event.target.closest("[data-comment]");
+  if (commentField && watchList.contains(commentField)) {
+    const truck = commentField.getAttribute("data-comment");
+    const value = commentField.value;
+    pendingComments.set(truck, value);
+    const existing = latestConfiguredTrucks.find((t) => t.id === truck);
+    if (existing) existing.comment = value;
 
-  if (commentTimers.has(truck)) clearTimeout(commentTimers.get(truck));
-  commentTimers.set(
+    if (commentTimers.has(truck)) clearTimeout(commentTimers.get(truck));
+    commentTimers.set(
+      truck,
+      setTimeout(() => {
+        void saveComment(truck, value);
+      }, 700)
+    );
+    return;
+  }
+
+  const deviceField = event.target.closest("[data-device]");
+  if (!deviceField || !watchList.contains(deviceField)) return;
+  const truck = deviceField.getAttribute("data-device");
+  const value = deviceField.value;
+  pendingDevices.set(truck, value);
+  const existing = latestConfiguredTrucks.find((t) => t.id === truck);
+  if (existing) existing.device = value;
+
+  if (deviceTimers.has(truck)) clearTimeout(deviceTimers.get(truck));
+  deviceTimers.set(
     truck,
     setTimeout(() => {
-      void saveComment(truck, value);
+      void saveDevice(truck, value);
     }, 700)
   );
 });
 
 watchList.addEventListener("change", (event) => {
-  const field = event.target.closest("[data-comment]");
-  if (!field || !watchList.contains(field)) return;
-  const truck = field.getAttribute("data-comment");
-  pendingComments.set(truck, field.value);
-  if (commentTimers.has(truck)) {
-    clearTimeout(commentTimers.get(truck));
-    commentTimers.delete(truck);
+  const commentField = event.target.closest("[data-comment]");
+  if (commentField && watchList.contains(commentField)) {
+    const truck = commentField.getAttribute("data-comment");
+    pendingComments.set(truck, commentField.value);
+    if (commentTimers.has(truck)) {
+      clearTimeout(commentTimers.get(truck));
+      commentTimers.delete(truck);
+    }
+    void saveComment(truck, commentField.value);
+    return;
   }
-  void saveComment(truck, field.value);
+
+  const deviceField = event.target.closest("[data-device]");
+  if (!deviceField || !watchList.contains(deviceField)) return;
+  const truck = deviceField.getAttribute("data-device");
+  pendingDevices.set(truck, deviceField.value);
+  if (deviceTimers.has(truck)) {
+    clearTimeout(deviceTimers.get(truck));
+    deviceTimers.delete(truck);
+  }
+  void saveDevice(truck, deviceField.value);
 });
 
 watchList.addEventListener("blur", (event) => {
-  const field = event.target.closest?.("[data-comment]");
-  if (!field || !watchList.contains(field)) return;
-  const truck = field.getAttribute("data-comment");
-  pendingComments.set(truck, field.value);
-  if (commentTimers.has(truck)) {
-    clearTimeout(commentTimers.get(truck));
-    commentTimers.delete(truck);
+  const commentField = event.target.closest?.("[data-comment]");
+  if (commentField && watchList.contains(commentField)) {
+    const truck = commentField.getAttribute("data-comment");
+    pendingComments.set(truck, commentField.value);
+    if (commentTimers.has(truck)) {
+      clearTimeout(commentTimers.get(truck));
+      commentTimers.delete(truck);
+    }
+    void saveComment(truck, commentField.value);
+    return;
   }
-  void saveComment(truck, field.value);
+
+  const deviceField = event.target.closest?.("[data-device]");
+  if (!deviceField || !watchList.contains(deviceField)) return;
+  const truck = deviceField.getAttribute("data-device");
+  pendingDevices.set(truck, deviceField.value);
+  if (deviceTimers.has(truck)) {
+    clearTimeout(deviceTimers.get(truck));
+    deviceTimers.delete(truck);
+  }
+  void saveDevice(truck, deviceField.value);
 }, true);
 
 watchSearchInput.addEventListener("input", () => {
@@ -107,22 +152,25 @@ watchSearchClear.addEventListener("click", () => {
 addTruckForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const truck = truckInput.value.trim();
+  const device = deviceInput?.value.trim() || "";
   if (!truck) return;
 
   const submitBtn = addTruckForm.querySelector('button[type="submit"]');
   if (submitBtn) submitBtn.disabled = true;
   truckInput.disabled = true;
+  if (deviceInput) deviceInput.disabled = true;
   truckFormNote.textContent = "Saving truck…";
 
   try {
     const res = await fetch("/api/camera/trucks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ truck }),
+      body: JSON.stringify({ truck, device }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || `Could not add truck (${res.status})`);
     truckInput.value = "";
+    if (deviceInput) deviceInput.value = "";
     if (data.added) {
       truckFormNote.textContent = data.lookupPending
         ? `Added ${data.truck}. Looking up driver on Webfleet…`
@@ -140,10 +188,32 @@ addTruckForm.addEventListener("submit", async (event) => {
     truckFormNote.textContent = error.message || String(error);
   } finally {
     truckInput.disabled = false;
+    if (deviceInput) deviceInput.disabled = false;
     if (submitBtn) submitBtn.disabled = false;
     truckInput.focus();
   }
 });
+
+async function saveDevice(truck, device) {
+  const text = String(device || "");
+  pendingDevices.set(truck, text);
+  try {
+    const res = await fetch(`/api/camera/trucks/${encodeURIComponent(truck)}/device`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ device: text }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `Could not save device (${res.status})`);
+    const saved = data.device || "";
+    const entry = latestConfiguredTrucks.find((t) => t.id === truck);
+    if (pendingDevices.get(truck) === text && entry) {
+      entry.device = saved;
+    }
+  } catch (error) {
+    truckFormNote.textContent = error.message || String(error);
+  }
+}
 
 async function saveComment(truck, comment) {
   const text = String(comment || "");
@@ -174,6 +244,13 @@ async function saveComment(truck, comment) {
   }
 }
 
+function focusedDeviceTruck() {
+  const active = document.activeElement;
+  if (!active || !watchList.contains(active)) return null;
+  if (!active.matches?.("[data-device]")) return null;
+  return active.getAttribute("data-device");
+}
+
 function focusedCommentTruck() {
   const active = document.activeElement;
   if (!active || !watchList.contains(active)) return null;
@@ -181,12 +258,20 @@ function focusedCommentTruck() {
   return active.getAttribute("data-comment");
 }
 
-function mergePendingComments(trucks) {
+function mergePendingFromServer(trucks) {
   return (trucks || []).map((truck) => {
-    const pending = pendingComments.get(truck.id);
-    if (pending == null) return truck;
-    return { ...truck, comment: pending };
+    const pendingComment = pendingComments.get(truck.id);
+    const pendingDevice = pendingDevices.get(truck.id);
+    return {
+      ...truck,
+      comment: pendingComment != null ? pendingComment : truck.comment,
+      device: pendingDevice != null ? pendingDevice : truck.device,
+    };
   });
+}
+
+function mergePendingComments(trucks) {
+  return mergePendingFromServer(trucks);
 }
 
 function syncPendingFromDom() {
@@ -195,6 +280,13 @@ function syncPendingFromDom() {
     if (!truck) return;
     if (document.activeElement === field || pendingComments.has(truck)) {
       pendingComments.set(truck, field.value);
+    }
+  });
+  watchList.querySelectorAll("[data-device]").forEach((field) => {
+    const truck = field.getAttribute("data-device");
+    if (!truck) return;
+    if (document.activeElement === field || pendingDevices.has(truck)) {
+      pendingDevices.set(truck, field.value);
     }
   });
 }
@@ -283,6 +375,7 @@ function matchesSearch(entry, live, query) {
   if (!query) return true;
   const hay = [
     entry?.id,
+    entry?.device,
     entry?.driver,
     entry?.comment,
     live?.locationText,
@@ -302,10 +395,11 @@ function renderZoneList(el, rows, emptyMessage) {
   el.innerHTML = rows
     .map((row) => {
       const driver = row.driver ? escapeHtml(row.driver) : "No driver yet";
+      const device = row.device ? escapeHtml(row.device) : "";
       const comment = row.comment ? escapeHtml(row.comment) : "";
       return `<div class="truck-row">
         <strong>${escapeHtml(row.truckNumber)}</strong>
-        <span>${driver}${comment ? ` · ${comment}` : ""}<br />${escapeHtml(row.locationText || "—")}</span>
+        <span>${device ? `Device ${device} · ` : ""}${driver}${comment ? ` · ${comment}` : ""}<br />${escapeHtml(row.locationText || "—")}</span>
       </div>`;
     })
     .join("");
@@ -335,6 +429,7 @@ function renderLive(incidents, configuredTrucks) {
       ...row,
       driver: cfg.driver || "",
       comment: cfg.comment || "",
+      device: cfg.device || "",
     };
   };
 
@@ -384,10 +479,11 @@ function renderLive(incidents, configuredTrucks) {
         const cls =
           zone === "depot" ? "in" : zone === "johannesburg" ? "jhb" : "";
         const driver = row.driver ? escapeHtml(row.driver) : "No driver";
+        const device = row.device ? `Device ${escapeHtml(row.device)} · ` : "";
         const comment = row.comment ? ` · ${escapeHtml(row.comment)}` : "";
         return `<div class="truck-chip ${cls}">
           <strong>${escapeHtml(row.truckNumber)}</strong>
-          <span>${zoneLabel(zone)} · ${driver}${comment}<br />${escapeHtml(row.locationText || "—")}</span>
+          <span>${zoneLabel(zone)} · ${device}${driver}${comment}<br />${escapeHtml(row.locationText || "—")}</span>
         </div>`;
       })
       .join("");
@@ -395,9 +491,7 @@ function renderLive(incidents, configuredTrucks) {
 }
 
 function renderWatchList(configuredTrucks, liveRows, { force = false } = {}) {
-  // Never rebuild comment inputs while the user is typing — that steals focus
-  // and wipes the text mid-keystroke when the 4s poll refreshes the page.
-  const focusedTruck = focusedCommentTruck();
+  const focusedTruck = focusedCommentTruck() || focusedDeviceTruck();
   if (focusedTruck && !force) {
     truckCount.textContent = `${configuredTrucks.length} truck${configuredTrucks.length === 1 ? "" : "s"}`;
     return;
@@ -431,6 +525,7 @@ function renderWatchList(configuredTrucks, liveRows, { force = false } = {}) {
       const cls =
         zone === "depot" ? "in" : zone === "johannesburg" ? "jhb" : "";
       const metaParts = [];
+      if (entry.device) metaParts.push(`Device ${escapeHtml(entry.device)}`);
       if (entry.driver) metaParts.push(escapeHtml(entry.driver));
       if (live?.locationText) {
         metaParts.push(
@@ -445,10 +540,23 @@ function renderWatchList(configuredTrucks, liveRows, { force = false } = {}) {
       }
       const commentValue =
         pendingComments.has(entry.id) ? pendingComments.get(entry.id) : entry.comment || "";
+      const deviceValue =
+        pendingDevices.has(entry.id) ? pendingDevices.get(entry.id) : entry.device || "";
       return `<div class="watch-row watch-row-incidents ${cls}">
         <div class="watch-main">
           <strong>${escapeHtml(entry.id)}</strong>
           <span>${metaParts.join(" · ") || "—"}</span>
+          <label class="comment-label" for="device-${escapeHtml(entry.id)}">Device</label>
+          <input
+            id="device-${escapeHtml(entry.id)}"
+            class="comment-input"
+            type="text"
+            data-device="${escapeHtml(entry.id)}"
+            value="${escapeHtml(deviceValue)}"
+            placeholder="Lytx device number (e.g. MV00095227)"
+            autocomplete="off"
+            spellcheck="false"
+          />
           <label class="comment-label" for="comment-${escapeHtml(entry.id)}">Comment</label>
           <input
             id="comment-${escapeHtml(entry.id)}"
