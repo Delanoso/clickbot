@@ -42,6 +42,10 @@
     "pollIntervalMs": 60000,
     "trucks": []
   },
+  "cameraWatch": {
+    "pollIntervalMs": 60000,
+    "trucks": []
+  },
   "wakeTrucks": {
     "pageSize": 100,
     "clickDelayMs": 1000

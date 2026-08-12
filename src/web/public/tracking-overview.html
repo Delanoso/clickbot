@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>All tracking · clickbot</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="atmosphere" aria-hidden="true"></div>
+    <header class="hero hero-compact">
+      <nav class="top-nav">
+        <a class="nav-link" href="/">Home</a>
+        <a class="nav-link active" href="/tracking">Tracking</a>
+        <a class="nav-link" href="/wake-trucks">Wake Trucks</a>
+      </nav>
+      <div id="trackingSubnav"></div>
+      <p class="eyebrow">PPE · Incident · Camera</p>
+      <h1 class="brand brand-sm">All tracking</h1>
+      <p class="lede">
+        Combined view of every tracked truck. Choose a reason when adding.
+        Green = depot, yellow = Johannesburg. Badges mark PPE, Incident, or Camera.
+      </p>
+      <div class="hero-meta">
+        <span id="hostLine">Starting…</span>
+        <span id="clockLine"></span>
+      </div>
+    </header>
+
+    <main class="depot-main">
+      <section class="control-bar">
+        <div class="control-status">
+          <span class="status-dot" id="trackDot"></span>
+          <div>
+            <strong id="trackState">idle</strong>
+            <p id="trackMessage">Start monitors for each reason as needed</p>
+          </div>
+        </div>
+        <div class="task-actions">
+          <button type="button" class="btn primary" id="startAllBtn">Start all monitors</button>
+          <button type="button" class="btn" id="stopAllBtn">Stop all</button>
+        </div>
+      </section>
+
+      <section class="truck-manager" aria-label="Add truck">
+        <div class="section-head">
+          <div>
+            <h2>Add truck</h2>
+            <p>Pick why you are tracking it — Driver PPE, Driver Incident, or Truck Camera.</p>
+          </div>
+          <p id="truckCount" class="muted-strong">0 trucks</p>
+        </div>
+        <form id="addTruckForm" class="add-truck-form">
+          <label for="reasonSelect">Reason</label>
+          <select id="reasonSelect" name="reason" required>
+            <option value="ppe">Driver PPE</option>
+            <option value="incident">Driver Incident</option>
+            <option value="camera">Truck Camera</option>
+          </select>
+          <label for="truckInput">Truck number</label>
+          <div class="add-truck-row">
+            <input
+              id="truckInput"
+              name="truck"
+              type="text"
+              placeholder="e.g. R2051 or H2513"
+              autocomplete="off"
+              required
+            />
+            <button type="submit" class="btn primary">Add truck</button>
+          </div>
+          <p id="truckFormNote" class="form-note"></p>
+        </form>
+      </section>
+
+      <section class="zone-boards" aria-label="Location boards">
+        <div class="zone-board zone-depot">
+          <div class="section-head">
+            <div>
+              <h2>In depot</h2>
+              <p id="depotSummary">Waiting for monitor data…</p>
+            </div>
+            <div class="count-block">
+              <span class="count-label">Depot</span>
+              <strong id="inDepotCount">0</strong>
+            </div>
+          </div>
+          <div id="inDepotList" class="truck-list"></div>
+        </div>
+        <div class="zone-board zone-jhb">
+          <div class="section-head">
+            <div>
+              <h2>In Johannesburg</h2>
+              <p id="jhbSummary">CoJ + East Rand matches across all reasons.</p>
+            </div>
+            <div class="count-block count-jhb">
+              <span class="count-label">JHB</span>
+              <strong id="inJhbCount">0</strong>
+            </div>
+          </div>
+          <div id="inJhbList" class="truck-list"></div>
+        </div>
+      </section>
+
+      <section class="depot-board" aria-label="All watched">
+        <div class="section-subhead">
+          <h3>All watched trucks</h3>
+          <p id="watchedMeta"></p>
+        </div>
+        <div id="allTruckList" class="truck-grid"></div>
+      </section>
+    </main>
+
+    <script type="module" src="/tracking-overview.js?v=20260812a"></script>
+  </body>
+</html>

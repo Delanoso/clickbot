@@ -2,9 +2,9 @@ const hostLine = document.getElementById("hostLine");
 const clockLine = document.getElementById("clockLine");
 const logTabs = document.getElementById("logTabs");
 const logView = document.getElementById("logView");
-const depotDot = document.getElementById("depotDot");
-const depotState = document.getElementById("depotState");
-const depotDetail = document.getElementById("depotDetail");
+const trackDot = document.getElementById("trackDot");
+const trackState = document.getElementById("trackState");
+const trackDetail = document.getElementById("trackDetail");
 const wakeDot = document.getElementById("wakeDot");
 const wakeState = document.getElementById("wakeState");
 const wakeDetail = document.getElementById("wakeDetail");
@@ -41,19 +41,28 @@ async function controlTask(taskId, action) {
 }
 
 function renderTasks(tasks) {
+  const trackingIds = ["depot-monitor", "incidents-monitor", "camera-monitor"];
+  const trackingTasks = tasks.filter((task) => trackingIds.includes(task.id));
+  if (trackState && trackingTasks.length) {
+    const anyRunning = trackingTasks.some((task) => task.running);
+    const state = anyRunning
+      ? "running"
+      : trackingTasks.some((task) => task.status?.state === "error")
+        ? "error"
+        : "idle";
+    trackState.textContent = state;
+    trackDot.className = `status-dot ${state}`;
+    const watched = trackingTasks.reduce(
+      (sum, task) => sum + (Number(task.status?.watchedCount) || 0),
+      0
+    );
+    trackDetail.textContent = watched
+      ? `${watched} watched`
+      : trackingTasks.map((task) => task.name).join(" · ");
+  }
+
   for (const task of tasks) {
-    if (task.id === "depot-monitor") {
-      const state = task.running
-        ? "running"
-        : task.status?.state || (task.exitCode != null ? "stopped" : "idle");
-      depotState.textContent = state;
-      depotDot.className = `status-dot ${state}`;
-      depotDetail.textContent =
-        task.status?.inDepotCount != null
-          ? `${task.status.inDepotCount} / ${task.status.watchedCount || "?"}`
-          : task.status?.message || "—";
-      continue;
-    }
+    if (trackingIds.includes(task.id)) continue;
 
     if (task.id === "wake-trucks") {
       const state = task.running
@@ -68,8 +77,6 @@ function renderTasks(tasks) {
           : task.status?.message || "—");
       continue;
     }
-
-    if (task.id === "incidents-monitor") continue;
 
     const panel = document.querySelector(`[data-task="${task.id}"]`);
     if (!panel) continue;
@@ -95,9 +102,7 @@ function renderTasks(tasks) {
 
   const homeTasks = tasks.filter(
     (task) =>
-      task.id !== "depot-monitor" &&
-      task.id !== "incidents-monitor" &&
-      task.id !== "wake-trucks"
+      !trackingIds.includes(task.id) && task.id !== "wake-trucks"
   );
   logTabs.innerHTML = "";
   for (const task of homeTasks) {

@@ -28,15 +28,21 @@ export const TASKS = [
   },
   {
     id: "depot-monitor",
-    name: "Depot Monitor",
-    summary: "Watch trucks and alert when they enter Boksburg depot.",
+    name: "Driver PPE",
+    summary: "PPE tracking — watch trucks and alert when they enter Boksburg depot.",
     cli: "depot-monitor",
   },
   {
     id: "incidents-monitor",
-    name: "Incidents and Drivers",
-    summary: "Watch trucks for depot (green) and Johannesburg (yellow) with driver comments.",
+    name: "Driver Incident",
+    summary: "Incident tracking — depot (green) and Johannesburg (yellow) with comments.",
     cli: "incidents-monitor",
+  },
+  {
+    id: "camera-monitor",
+    name: "Truck Camera",
+    summary: "Camera tracking — trucks with cameras not working (depot + Johannesburg).",
+    cli: "camera-monitor",
   },
   {
     id: "wake-trucks",
@@ -184,4 +190,8 @@ export function getDepotSnapshot() {
 
 export function getIncidentsSnapshot() {
   return readTaskStatus("incidents-monitor");
+}
+
+export function getCameraSnapshot() {
+  return readTaskStatus("camera-monitor");
 }

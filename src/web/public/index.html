@@ -17,14 +17,13 @@
     <header class="hero">
       <nav class="top-nav">
         <a class="nav-link active" href="/">Home</a>
-        <a class="nav-link" href="/depot">Depot Monitor</a>
-        <a class="nav-link" href="/incidents-drivers">Incidents and Drivers</a>
+        <a class="nav-link" href="/tracking">Tracking</a>
         <a class="nav-link" href="/wake-trucks">Wake Trucks</a>
       </nav>
       <p class="eyebrow">Personal ops console</p>
       <h1 class="brand">clickbot</h1>
       <p class="lede">
-        Run allocate, FYI, and coaching from here. Depot, incidents, and wake trucks have their own pages.
+        Run allocate, FYI, and coaching from here. Tracking covers PPE, incidents, and cameras; Wake Trucks has its own page.
       </p>
       <div class="hero-meta">
         <span id="hostLine">Starting…</span>
@@ -103,18 +102,18 @@
 
         <article class="task-panel task-panel-link">
           <div class="task-head">
-            <h2>Depot Monitor</h2>
-            <span class="status-dot" id="depotDot"></span>
+            <h2>Tracking</h2>
+            <span class="status-dot" id="trackDot"></span>
           </div>
           <p class="task-copy">
-            Boksburg live board, alerts, and truck watch list on a dedicated page.
+            Driver PPE, Driver Incident, and Truck Camera — with a combined depot / Johannesburg view.
           </p>
           <dl class="task-stats">
-            <div><dt>State</dt><dd id="depotState">idle</dd></div>
-            <div><dt>In depot</dt><dd id="depotDetail">—</dd></div>
+            <div><dt>State</dt><dd id="trackState">idle</dd></div>
+            <div><dt>Watched</dt><dd id="trackDetail">—</dd></div>
           </dl>
           <div class="task-actions">
-            <a class="btn primary" href="/depot">Open depot page</a>
+            <a class="btn primary" href="/tracking">Open tracking</a>
           </div>
         </article>
       </section>
@@ -131,6 +130,6 @@
       </section>
     </main>
 
-    <script type="module" src="/app.js?v=20260727b"></script>
+    <script type="module" src="/app.js?v=20260812a"></script>
   </body>
 </html>
