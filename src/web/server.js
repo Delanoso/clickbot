@@ -451,9 +451,10 @@ function sendTrackingExport(res, reason) {
   try {
     const csv = buildTrackingExportCsv(reason, CONFIG_PATH);
     res.writeHead(200, {
-      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Type": "application/vnd.ms-excel; charset=utf-8",
       "Content-Disposition": `attachment; filename="${trackingExportFilename(reason)}"`,
-      "Cache-Control": "no-store",
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+      Pragma: "no-cache",
     });
     res.end(csv);
   } catch (error) {
