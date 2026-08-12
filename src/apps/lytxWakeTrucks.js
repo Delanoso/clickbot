@@ -606,6 +606,7 @@ export async function runWakePass(page, { clickDelayMs = 1000, passNumber = 1 } 
   let clicked = 0;
   let pages = 0;
   const clickedVehicles = [];
+  const notAvailableVehicles = new Set();
   const pageResults = [];
   const warnings = [];
   const { total } = await readPagination(page);
@@ -614,6 +615,11 @@ export async function runWakePass(page, { clickDelayMs = 1000, passNumber = 1 } 
   for (let pageNum = 1; pageNum <= maxPages; pageNum += 1) {
     pages += 1;
     const rows = await scanVehicleRows(page);
+    for (const row of rows) {
+      if (row.status === "not_available") {
+        notAvailableVehicles.add(row.vehicleId);
+      }
+    }
     const targets = rows.filter(shouldClickWake);
     let pageClicked = 0;
     const pageClickedIds = [];
@@ -668,7 +674,15 @@ export async function runWakePass(page, { clickDelayMs = 1000, passNumber = 1 } 
     }
   }
 
-  return { clicked, pages, maxPages, pageResults, clickedVehicles, warnings };
+  return {
+    clicked,
+    pages,
+    maxPages,
+    pageResults,
+    clickedVehicles,
+    notAvailableVehicles: [...notAvailableVehicles],
+    warnings,
+  };
 }
 
 export async function collectNotBrowseTrucks(page) {

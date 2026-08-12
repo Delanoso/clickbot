@@ -5,6 +5,7 @@ import {
   setVehiclesPageSize,
 } from "../apps/lytxWakeTrucks.js";
 import { writeTaskStatus } from "../utils/taskStatus.js";
+import { addCameraTruck } from "../web/cameraConfig.js";
 
 /**
  * Wake Trucks — single pass through all Lytx Video Search → Vehicles pages.
@@ -38,6 +39,43 @@ export async function runWakeTrucks(config) {
 
       console.log("[wake] Run starting…");
       const result = await runWakePass(page, { clickDelayMs, passNumber: 1 });
+
+      // If Lytx shows "Not available, No Recent Activity" (typically paginated pages 4-5),
+      // auto-add those trucks into the Truck Camera list so the camera monitor can track them.
+      const notAvailable = result.notAvailableVehicles || [];
+      if (notAvailable.length) {
+        console.log(
+          `[wake] Auto-adding ${notAvailable.length} Not available trucks into camera list`
+        );
+        for (const truckNumber of notAvailable) {
+          try {
+            // We don't know Lytx device numbers here; leave it blank for the user to fill in.
+            addCameraTruck(truckNumber, { device: "", skipLookup: true, restart: false });
+          } catch (e) {
+            console.log(`[wake] Could not add ${truckNumber} to camera list: ${e?.message || e}`);
+          }
+        }
+
+        // camera-monitor reads config at startup; restart it so new trucks are picked up.
+        const dashboardHost = process.env.DASHBOARD_HOST || "127.0.0.1";
+        const dashboardPort = Number(process.env.DASHBOARD_PORT || 8787);
+        try {
+          await fetch(
+            `http://${dashboardHost}:${dashboardPort}/api/tasks/camera-monitor/stop`,
+            { method: "POST" }
+          ).catch(() => {});
+          await new Promise((r) => setTimeout(r, 1500));
+          await fetch(
+            `http://${dashboardHost}:${dashboardPort}/api/tasks/camera-monitor/start`,
+            {
+              method: "POST",
+            }
+          );
+        } catch (e) {
+          console.log(`[wake] Could not restart camera-monitor: ${e?.message || e}`);
+        }
+      }
+
       const summary = buildRunSummary({ pageSize, pageSizeSet, result });
       printRunSummary(summary);
 
