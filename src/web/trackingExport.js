@@ -71,10 +71,41 @@ function exportRowValues(truck, live, reasonText) {
   ];
 }
 
+/** Longer prefixes first so NH/TH/HT don't land in H/T groups. */
+const EXPORT_PREFIX_ORDER = ["NH", "TH", "HT", "MBV", "GT", "HD", "H", "R"];
+
+function truckExportPrefix(id) {
+  const upper = String(id || "").toUpperCase().trim();
+  for (const prefix of EXPORT_PREFIX_ORDER) {
+    if (upper.startsWith(prefix)) return prefix;
+  }
+  const letters = upper.match(/^([A-Z]+)/);
+  return letters ? letters[1] : upper;
+}
+
+function compareExportTrucks(a, b) {
+  const pa = truckExportPrefix(a.id);
+  const pb = truckExportPrefix(b.id);
+  const ia = EXPORT_PREFIX_ORDER.indexOf(pa);
+  const ib = EXPORT_PREFIX_ORDER.indexOf(pb);
+  const ra = ia >= 0 ? ia : EXPORT_PREFIX_ORDER.length;
+  const rb = ib >= 0 ? ib : EXPORT_PREFIX_ORDER.length;
+  if (ra !== rb) return ra - rb;
+  if (pa !== pb) return pa.localeCompare(pb);
+  return String(a.id).localeCompare(String(b.id), undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
+export function sortExportTrucks(trucks) {
+  return [...(trucks || [])].sort(compareExportTrucks);
+}
+
 function appendSection(rows, trucks, snapshot, reasonKey) {
   const live = liveById(snapshot);
   const label = reasonLabel(reasonKey);
-  for (const truck of trucks) {
+  for (const truck of sortExportTrucks(trucks)) {
     rows.push(exportRowValues(truck, live.get(truck.id) || {}, label));
   }
 }
