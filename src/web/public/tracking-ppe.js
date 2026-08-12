@@ -1,4 +1,4 @@
-import { mountTrackingSubnav } from "./tracking-shared.js";
+import { mountTrackingSubnav, downloadExportFile } from "./tracking-shared.js";
 mountTrackingSubnav("ppe");
 
 const hostLine = document.getElementById("hostLine");
@@ -27,9 +27,21 @@ const exportBtn = document.getElementById("exportBtn");
 startBtn.addEventListener("click", () => controlTask("start"));
 stopBtn.addEventListener("click", () => controlTask("stop"));
 
-exportBtn?.addEventListener("click", () => {
-  exportBtn.href = `/api/depot/export?t=${Date.now()}`;
+exportBtn?.addEventListener("click", (event) => {
+  event.preventDefault();
+  void downloadExportFile(`/api/depot/export?t=${Date.now()}`, "driver-ppe.csv").catch(
+    (error) => {
+      truckFormNote.textContent = error.message || "Export failed";
+    }
+  );
 });
+
+/** Bumped to ignore stale poll responses after add/remove. */
+let refreshGeneration = 0;
+const removingTrucks = new Set();
+let latestConfiguredTrucks = [];
+let latestLiveRows = [];
+let latestDepot = null;
 
 // Event delegation so Remove still works when the poll re-renders the list.
 watchList.addEventListener("click", (event) => {

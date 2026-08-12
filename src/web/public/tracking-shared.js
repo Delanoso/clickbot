@@ -31,6 +31,30 @@ export function trackingSubnavHtml(active) {
     .join("")}</nav>`;
 }
 
+/** Fetch export and save as a file — works on iPad Safari (avoids in-browser preview). */
+export async function downloadExportFile(url, fallbackName = "tracking-export.csv") {
+  const res = await fetch(url, { headers: { Accept: "text/csv" } });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Export failed (${res.status})`);
+  }
+  let filename = fallbackName;
+  const disposition = res.headers.get("Content-Disposition") || "";
+  const match = disposition.match(/filename="([^"]+)"/i);
+  if (match) filename = match[1];
+
+  const blob = await res.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = filename;
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+}
+
 export function reasonBadgeHtml(reason) {
   const meta = REASON_META[reason] || { short: reason || "?", tone: "other" };
   return `<span class="reason-badge reason-${meta.tone}">${escapeHtml(meta.short)}</span>`;

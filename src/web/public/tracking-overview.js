@@ -1,4 +1,4 @@
-import { mountTrackingSubnav, reasonBadgeHtml, escapeHtml, REASON_META } from "./tracking-shared.js";
+import { mountTrackingSubnav, reasonBadgeHtml, escapeHtml, REASON_META, downloadExportFile } from "./tracking-shared.js";
 
 mountTrackingSubnav("overview");
 
@@ -30,14 +30,26 @@ const removingTrucks = new Set();
 let latestTrucks = [];
 
 function updateExportLink() {
-  if (!exportBtn || !exportReason) return;
-  const reason = exportReason.value || "all";
-  exportBtn.href = `/api/tracking/export?reason=${encodeURIComponent(reason)}&t=${Date.now()}`;
+  /* export uses downloadExportFile on click */
 }
 
 exportReason?.addEventListener("change", updateExportLink);
-exportBtn?.addEventListener("click", updateExportLink);
-updateExportLink();
+exportBtn?.addEventListener("click", (event) => {
+  event.preventDefault();
+  const reason = exportReason?.value || "all";
+  const names = {
+    all: "all-tracking.csv",
+    ppe: "driver-ppe.csv",
+    incident: "driver-incident.csv",
+    camera: "truck-camera.csv",
+  };
+  void downloadExportFile(
+    `/api/tracking/export?reason=${encodeURIComponent(reason)}&t=${Date.now()}`,
+    names[reason] || "tracking-export.csv"
+  ).catch((error) => {
+    truckFormNote.textContent = error.message || "Export failed";
+  });
+});
 
 watchList?.addEventListener("click", (event) => {
   const btn = event.target.closest("[data-remove]");

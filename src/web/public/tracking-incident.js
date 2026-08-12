@@ -1,4 +1,4 @@
-import { mountTrackingSubnav } from "./tracking-shared.js";
+import { mountTrackingSubnav, downloadExportFile } from "./tracking-shared.js";
 mountTrackingSubnav("incident");
 
 const hostLine = document.getElementById("hostLine");
@@ -40,9 +40,13 @@ let latestIncidents = null;
 startBtn.addEventListener("click", () => controlTask("start"));
 stopBtn.addEventListener("click", () => controlTask("stop"));
 
-exportBtn.addEventListener("click", () => {
-  // Keep default navigation to download endpoint; refresh timestamp in filename via cache-buster.
-  exportBtn.href = `/api/incidents/export?t=${Date.now()}`;
+exportBtn.addEventListener("click", (event) => {
+  event.preventDefault();
+  void downloadExportFile(`/api/incidents/export?t=${Date.now()}`, "driver-incident.csv").catch(
+    (error) => {
+      truckFormNote.textContent = error.message || "Export failed";
+    }
+  );
 });
 
 watchList.addEventListener("click", (event) => {

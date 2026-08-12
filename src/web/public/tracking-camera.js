@@ -1,4 +1,4 @@
-import { mountTrackingSubnav } from "./tracking-shared.js";
+import { mountTrackingSubnav, downloadExportFile } from "./tracking-shared.js";
 mountTrackingSubnav("camera");
 
 const hostLine = document.getElementById("hostLine");
@@ -43,9 +43,13 @@ let latestCamera = null;
 startBtn.addEventListener("click", () => controlTask("start"));
 stopBtn.addEventListener("click", () => controlTask("stop"));
 
-exportBtn.addEventListener("click", () => {
-  // Keep default navigation to download endpoint; refresh timestamp in filename via cache-buster.
-  exportBtn.href = `/api/camera/export?t=${Date.now()}`;
+exportBtn.addEventListener("click", (event) => {
+  event.preventDefault();
+  void downloadExportFile(`/api/camera/export?t=${Date.now()}`, "truck-camera.csv").catch(
+    (error) => {
+      truckFormNote.textContent = error.message || "Export failed";
+    }
+  );
 });
 
 watchList.addEventListener("click", (event) => {
@@ -613,12 +617,19 @@ async function refresh({ force = false } = {}) {
   latestLiveRows = payload.camera?.trucks || [];
 
   // Drop pending entries that now match the server and are not focused.
-  const focused = focusedCommentTruck();
+  const focused = focusedCommentTruck() || focusedDeviceTruck();
   for (const truck of latestConfiguredTrucks) {
     if (!pendingComments.has(truck.id)) continue;
     if (truck.id === focused) continue;
     if (pendingComments.get(truck.id) === (truck.comment || "")) {
       pendingComments.delete(truck.id);
+    }
+  }
+  for (const truck of latestConfiguredTrucks) {
+    if (!pendingDevices.has(truck.id)) continue;
+    if (truck.id === focused) continue;
+    if (pendingDevices.get(truck.id) === (truck.device || "")) {
+      pendingDevices.delete(truck.id);
     }
   }
 
@@ -627,9 +638,10 @@ async function refresh({ force = false } = {}) {
   }
 
   renderTask(payload.task);
-  // Force watch-list rebuild only for explicit user actions (add/remove), never while typing.
-  renderFromCache({ forceWatchList: force && !focusedCommentTruck() });
-  if (!focusedCommentTruck()) {
+  renderFromCache({
+    forceWatchList: force && !focusedCommentTruck() && !focusedDeviceTruck(),
+  });
+  if (!focusedCommentTruck() && !focusedDeviceTruck()) {
     await refreshLogs();
   }
 }
