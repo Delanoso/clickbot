@@ -215,14 +215,20 @@ notesSearchClear.addEventListener("click", () => {
 newNoteBtn.addEventListener("click", () => openEditor(null));
 cancelEditBtn.addEventListener("click", () => closeEditor());
 
-noteForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
+async function saveCurrentNote() {
+  if (!noteTitle.value.trim()) {
+    noteFormNote.textContent = "Add a title first";
+    noteTitle.focus();
+    return;
+  }
   saveNoteBtn.disabled = true;
+  const bottomBtn = document.getElementById("saveNoteBtnBottom");
+  if (bottomBtn) bottomBtn.disabled = true;
   noteFormNote.textContent = "Saving…";
   const payload = {
     title: noteTitle.value.trim(),
     body: noteBody.value,
-    category: noteCategory.value,
+    category: noteCategory.value || "general",
     tags: noteTags.value,
     pinned: notePinned.checked,
   };
@@ -230,7 +236,7 @@ noteForm.addEventListener("submit", async (event) => {
   try {
     const res = await fetch(id ? `/api/notes/${encodeURIComponent(id)}` : "/api/notes", {
       method: id ? "PATCH" : "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify(payload),
     });
     const data = await res.json().catch(() => ({}));
@@ -242,7 +248,18 @@ noteForm.addEventListener("submit", async (event) => {
     noteFormNote.textContent = error.message || String(error);
   } finally {
     saveNoteBtn.disabled = false;
+    if (bottomBtn) bottomBtn.disabled = false;
   }
+}
+
+noteForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await saveCurrentNote();
+});
+
+saveNoteBtn.addEventListener("click", (event) => {
+  event.preventDefault();
+  void saveCurrentNote();
 });
 
 notesList.addEventListener("click", async (event) => {
