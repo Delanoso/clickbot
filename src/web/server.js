@@ -54,6 +54,13 @@ import {
   setCameraTrucks,
 } from "./cameraConfig.js";
 import {
+  createNote,
+  deleteNote,
+  listNotes,
+  NOTE_CATEGORIES,
+  updateNote,
+} from "./notesStore.js";
+import {
   normalizeReason,
   reasonLabel,
   TRACKING_REASON_META,
@@ -122,6 +129,7 @@ function serveStatic(req, res, urlPath) {
     relative = "/tracking-camera.html";
   }
   if (relative === "/wake-trucks" || relative === "/wake-trucks/") relative = "/wake-trucks.html";
+  if (relative === "/notes" || relative === "/notes/") relative = "/notes.html";
   if (
     relative === "/incidents-drivers" ||
     relative === "/incidents-drivers/" ||
@@ -466,6 +474,34 @@ function sendTrackingExport(res, reason) {
 }
 
 async function handleApi(req, res, url) {
+  if (req.method === "GET" && url.pathname === "/api/notes") {
+    const category = url.searchParams.get("category");
+    const q = url.searchParams.get("q") || "";
+    return sendJson(res, 200, listNotes({ category, q }));
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/notes") {
+    const body = await readBody(req);
+    const note = createNote(body);
+    return sendJson(res, 200, { note, categories: NOTE_CATEGORIES });
+  }
+
+  const notesMatch = url.pathname.match(/^\/api\/notes\/([^/]+)$/);
+  if (notesMatch) {
+    const id = decodeURIComponent(notesMatch[1]);
+    if (req.method === "PATCH" || req.method === "PUT") {
+      const body = await readBody(req);
+      const result = updateNote(id, body);
+      if (result.missing) return sendJson(res, 404, { error: "Note not found" });
+      return sendJson(res, 200, result);
+    }
+    if (req.method === "DELETE") {
+      const result = deleteNote(id);
+      if (!result.removed) return sendJson(res, 404, { error: "Note not found" });
+      return sendJson(res, 200, result);
+    }
+  }
+
   if (req.method === "GET" && url.pathname === "/api/health") {
     return sendJson(res, 200, {
       ok: true,

@@ -7,3 +7,4 @@ test-results/
 .auth/
 *.log
 .DS_Store
+data/notes.json

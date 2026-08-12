@@ -19,11 +19,12 @@
         <a class="nav-link active" href="/">Home</a>
         <a class="nav-link" href="/tracking">Tracking</a>
         <a class="nav-link" href="/wake-trucks">Wake Trucks</a>
+        <a class="nav-link" href="/notes">Notes</a>
       </nav>
       <p class="eyebrow">Personal ops console</p>
       <h1 class="brand">clickbot</h1>
       <p class="lede">
-        Run allocate, FYI, and coaching from here. Tracking covers PPE, incidents, and cameras; Wake Trucks has its own page.
+        Run allocate, FYI, and coaching from here. Tracking, Wake Trucks, and Notes each have their own page.
       </p>
       <div class="hero-meta">
         <span id="hostLine">Starting…</span>
@@ -116,6 +117,23 @@
             <a class="btn primary" href="/tracking">Open tracking</a>
           </div>
         </article>
+
+        <article class="task-panel task-panel-link">
+          <div class="task-head">
+            <h2>Notes</h2>
+            <span class="status-dot idle" id="notesHomeDot"></span>
+          </div>
+          <p class="task-copy">
+            Organised notepad for PPE, incidents, cameras, wake trucks, and general ops.
+          </p>
+          <dl class="task-stats">
+            <div><dt>Saved</dt><dd id="notesHomeDetail">—</dd></div>
+            <div><dt>Open</dt><dd>Notes page</dd></div>
+          </dl>
+          <div class="task-actions">
+            <a class="btn primary" href="/notes">Open notes</a>
+          </div>
+        </article>
       </section>
 
       <section class="log-board" aria-label="Task log">
@@ -130,6 +148,6 @@
       </section>
     </main>
 
-    <script type="module" src="/app.js?v=20260812a"></script>
+    <script type="module" src="/app.js?v=20260812n"></script>
   </body>
 </html>

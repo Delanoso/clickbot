@@ -5,6 +5,8 @@ const logView = document.getElementById("logView");
 const trackDot = document.getElementById("trackDot");
 const trackState = document.getElementById("trackState");
 const trackDetail = document.getElementById("trackDetail");
+const notesHomeDot = document.getElementById("notesHomeDot");
+const notesHomeDetail = document.getElementById("notesHomeDetail");
 const wakeDot = document.getElementById("wakeDot");
 const wakeState = document.getElementById("wakeState");
 const wakeDetail = document.getElementById("wakeDetail");
@@ -130,18 +132,27 @@ async function refreshLogs() {
 }
 
 async function refresh() {
-  const [healthRes, tasksRes] = await Promise.all([
+  const [healthRes, tasksRes, notesRes] = await Promise.all([
     fetch("/api/health"),
     fetch("/api/tasks"),
+    fetch("/api/notes"),
   ]);
   const health = await healthRes.json();
   const tasksPayload = await tasksRes.json();
+  const notesPayload = await notesRes.json().catch(() => ({}));
 
   const ip = (health.addresses && health.addresses[0]) || location.hostname;
   hostLine.textContent = `http://${ip}${location.port ? `:${location.port}` : ""}`;
   clockLine.textContent = new Date().toLocaleString();
 
   renderTasks(tasksPayload.tasks || []);
+  if (notesHomeDetail) {
+    const total = notesPayload.counts?.all ?? notesPayload.notes?.length ?? 0;
+    notesHomeDetail.textContent = `${total} note${total === 1 ? "" : "s"}`;
+    if (notesHomeDot) {
+      notesHomeDot.className = `status-dot ${total ? "running" : "idle"}`;
+    }
+  }
   await refreshLogs();
 }
 
