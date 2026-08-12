@@ -43,6 +43,14 @@
           </div>
         </div>
         <div class="task-actions">
+          <label class="export-label" for="exportReason">Export</label>
+          <select id="exportReason" class="export-select" aria-label="Export sheet">
+            <option value="all">All tracking</option>
+            <option value="ppe">Driver PPE</option>
+            <option value="incident">Driver Incident</option>
+            <option value="camera">Truck Camera</option>
+          </select>
+          <a class="btn" id="exportBtn" href="/api/tracking/export?reason=all">Export Excel</a>
           <button type="button" class="btn primary" id="startAllBtn">Start all monitors</button>
           <button type="button" class="btn" id="stopAllBtn">Stop all</button>
         </div>

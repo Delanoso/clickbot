@@ -22,6 +22,18 @@ const truckInput = document.getElementById("truckInput");
 const reasonSelect = document.getElementById("reasonSelect");
 const startAllBtn = document.getElementById("startAllBtn");
 const stopAllBtn = document.getElementById("stopAllBtn");
+const exportBtn = document.getElementById("exportBtn");
+const exportReason = document.getElementById("exportReason");
+
+function updateExportLink() {
+  if (!exportBtn || !exportReason) return;
+  const reason = exportReason.value || "all";
+  exportBtn.href = `/api/tracking/export?reason=${encodeURIComponent(reason)}&t=${Date.now()}`;
+}
+
+exportReason?.addEventListener("change", updateExportLink);
+exportBtn?.addEventListener("click", updateExportLink);
+updateExportLink();
 
 function formatTime(value) {
   if (!value) return "—";

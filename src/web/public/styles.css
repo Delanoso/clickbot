@@ -817,3 +817,19 @@ a.btn.is-disabled {
   font: inherit;
   padding: 0.6rem 0.75rem;
 }
+
+.export-label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.export-select {
+  border: 1px solid var(--line);
+  background: rgba(5, 9, 14, 0.75);
+  color: var(--text);
+  font: inherit;
+  padding: 0.55rem 0.7rem;
+  min-width: 10rem;
+}

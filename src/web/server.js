@@ -57,6 +57,10 @@ import {
   reasonLabel,
   TRACKING_REASON_META,
 } from "./trackingReasons.js";
+import {
+  buildTrackingExportCsv,
+  trackingExportFilename,
+} from "./trackingExport.js";
 
 loadEnvFile();
 
@@ -427,58 +431,33 @@ function stage1WokenTrucks() {
 }
 
 function csvEscape(value) {
-  const text = String(value ?? "");
-  if (/[",\r\n]/.test(text)) {
+  const text = String(value ?? "")
+    .replace(/\r\n/g, " ")
+    .replace(/[\r\n\u2028\u2029]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (/[",]/.test(text)) {
     return `"${text.replace(/"/g, '""')}"`;
   }
   return text;
 }
 
 function buildIncidentsExportCsv() {
-  const config = readIncidentsConfig(CONFIG_PATH);
-  const snapshot = getIncidentsSnapshot() || {};
-  const liveById = new Map(
-    (snapshot.trucks || []).map((row) => [
-      String(row.truckNumber || "").toUpperCase(),
-      row,
-    ])
-  );
+  return buildTrackingExportCsv("incident", CONFIG_PATH);
+}
 
-  const header = [
-    "Truck",
-    "Driver",
-    "Comment",
-    "Reason",
-    "Zone",
-    "In Depot",
-    "In Johannesburg",
-    "Location",
-    "Last Checked",
-  ];
-  const lines = [header.join(",")];
-
-  for (const truck of config.trucks) {
-    const live = liveById.get(truck.id) || {};
-    const zone = live.zone || (live.inDepot ? "depot" : live.inJohannesburg ? "johannesburg" : "other");
-    lines.push(
-      [
-        truck.id,
-        truck.driver || "",
-        truck.comment || "",
-        "Driver Incident",
-        zone,
-        live.inDepot ? "YES" : "NO",
-        live.inJohannesburg ? "YES" : "NO",
-        live.locationText || "",
-        live.checkedAt || "",
-      ]
-        .map(csvEscape)
-        .join(",")
-    );
+function sendTrackingExport(res, reason) {
+  try {
+    const csv = buildTrackingExportCsv(reason, CONFIG_PATH);
+    res.writeHead(200, {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${trackingExportFilename(reason)}"`,
+      "Cache-Control": "no-store",
+    });
+    res.end(csv);
+  } catch (error) {
+    sendJson(res, 400, { error: error.message || String(error) });
   }
-
-  // Excel-friendly UTF-8 BOM
-  return `\uFEFF${lines.join("\r\n")}\r\n`;
 }
 
 async function handleApi(req, res, url) {
@@ -610,15 +589,16 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/incidents/export") {
-    const csv = buildIncidentsExportCsv();
-    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-    res.writeHead(200, {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="incidents-drivers-${stamp}.csv"`,
-      "Cache-Control": "no-store",
-    });
-    res.end(csv);
-    return;
+    return sendTrackingExport(res, "incident");
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/depot/export") {
+    return sendTrackingExport(res, "ppe");
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/tracking/export") {
+    const reason = url.searchParams.get("reason") || "all";
+    return sendTrackingExport(res, reason);
   }
 
   if (url.pathname === "/api/incidents/trucks") {
@@ -711,53 +691,7 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/camera/export") {
-    const config = readCameraConfig(CONFIG_PATH);
-    const snapshot = getCameraSnapshot() || {};
-    const liveById = new Map(
-      (snapshot.trucks || []).map((row) => [
-        String(row.truckNumber || "").toUpperCase(),
-        row,
-      ])
-    );
-    const header = [
-      "Truck",
-      "Driver",
-      "Comment",
-      "Reason",
-      "Zone",
-      "In Depot",
-      "In Johannesburg",
-      "Location",
-      "Last Checked",
-    ];
-    const lines = [header.join(",")];
-    for (const truck of config.trucks) {
-      const live = liveById.get(truck.id) || {};
-      const zone =
-        live.zone ||
-        (live.inDepot ? "depot" : live.inJohannesburg ? "johannesburg" : "other");
-      lines.push(
-        [
-          csvEscape(truck.id),
-          csvEscape(truck.driver),
-          csvEscape(truck.comment),
-          csvEscape("Truck Camera"),
-          csvEscape(zone),
-          csvEscape(live.inDepot ? "yes" : "no"),
-          csvEscape(live.inJohannesburg ? "yes" : "no"),
-          csvEscape(live.locationText || ""),
-          csvEscape(live.checkedAt || ""),
-        ].join(",")
-      );
-    }
-    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-    res.writeHead(200, {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="truck-camera-${stamp}.csv"`,
-      "Cache-Control": "no-store",
-    });
-    res.end(`\uFEFF${lines.join("\r\n")}\r\n`);
-    return;
+    return sendTrackingExport(res, "camera");
   }
 
   if (url.pathname === "/api/camera/trucks") {

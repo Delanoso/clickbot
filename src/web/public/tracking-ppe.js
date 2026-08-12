@@ -22,16 +22,14 @@ const watchSearchNote = document.getElementById("watchSearchNote");
 const logView = document.getElementById("logView");
 const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
-
-/** Bumped to ignore stale poll responses after add/remove. */
-let refreshGeneration = 0;
-const removingTrucks = new Set();
-let latestConfiguredTrucks = [];
-let latestLiveRows = [];
-let latestDepot = null;
+const exportBtn = document.getElementById("exportBtn");
 
 startBtn.addEventListener("click", () => controlTask("start"));
 stopBtn.addEventListener("click", () => controlTask("stop"));
+
+exportBtn?.addEventListener("click", () => {
+  exportBtn.href = `/api/depot/export?t=${Date.now()}`;
+});
 
 // Event delegation so Remove still works when the poll re-renders the list.
 watchList.addEventListener("click", (event) => {
