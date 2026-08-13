@@ -11,6 +11,12 @@ import {
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { normalizeTruckId } from "./depotConfig.js";
+import {
+  cameraMarkComment,
+  isAutoCameraComment,
+  normalizeCameraMark,
+  preferCameraMark,
+} from "./cameraMarks.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DEFAULT_CONFIG = "config/local.json";
@@ -85,11 +91,12 @@ export function normalizeCameraTruckEntry(value) {
       driver: String(value.driver || value.driverName || "").trim(),
       comment: String(value.comment || "").trim(),
       device: String(value.device || value.deviceNumber || "").trim(),
+      mark: normalizeCameraMark(value.mark || value.cameraMark || value.issue || ""),
     };
   }
   const id = normalizeTruckId(value);
   if (!id) return null;
-  return { id, driver: "", comment: "", device: "" };
+  return { id, driver: "", comment: "", device: "", mark: "" };
 }
 
 export function normalizeCameraTruckEntries(list) {
@@ -144,13 +151,14 @@ function saveTruckEntries(current, trucks) {
 
 export function addCameraTruck(
   truckNumber,
-  { driver = "", comment = "", device = "", configPath = DEFAULT_CONFIG } = {}
+  { driver = "", comment = "", device = "", mark = "", configPath = DEFAULT_CONFIG } = {}
 ) {
   const truck = normalizeTruckId(truckNumber);
   if (!truck) throw new Error("Truck number is required");
   const driverName = String(driver || "").trim();
   const commentText = String(comment || "").trim();
   const deviceNumber = String(device || "").trim();
+  const incomingMark = normalizeCameraMark(mark);
 
   return withConfigLock(configPath, () => {
     const current = readCameraConfig(configPath);
@@ -161,12 +169,23 @@ export function addCameraTruck(
         existing.driver = driverName;
         updated = true;
       }
-      if (commentText && existing.comment !== commentText) {
-        existing.comment = commentText;
-        updated = true;
-      }
       if (deviceNumber && existing.device !== deviceNumber) {
         existing.device = deviceNumber;
+        updated = true;
+      }
+      if (incomingMark) {
+        const nextMark = preferCameraMark(existing.mark, incomingMark);
+        if (nextMark !== (existing.mark || "")) {
+          existing.mark = nextMark;
+          updated = true;
+        }
+      }
+      if (
+        commentText &&
+        existing.comment !== commentText &&
+        (!existing.comment || isAutoCameraComment(existing.comment))
+      ) {
+        existing.comment = commentText;
         updated = true;
       }
       if (updated) saveTruckEntries(current, current.trucks);
@@ -178,12 +197,21 @@ export function addCameraTruck(
         driver: existing.driver || "",
         comment: existing.comment || "",
         device: existing.device || "",
+        mark: existing.mark || "",
       };
     }
 
+    const resolvedMark = incomingMark;
+    const resolvedComment = commentText || cameraMarkComment(resolvedMark);
     const trucks = [
       ...current.trucks,
-      { id: truck, driver: driverName, comment: commentText, device: deviceNumber },
+      {
+        id: truck,
+        driver: driverName,
+        comment: resolvedComment,
+        device: deviceNumber,
+        mark: resolvedMark,
+      },
     ];
     saveTruckEntries(current, trucks);
     return {
@@ -192,8 +220,9 @@ export function addCameraTruck(
       updated: false,
       truck,
       driver: driverName,
-      comment: commentText,
+      comment: resolvedComment,
       device: deviceNumber,
+      mark: resolvedMark,
     };
   });
 }
@@ -291,7 +320,7 @@ export function setCameraTrucks(truckNumbers, configPath = DEFAULT_CONFIG) {
     const previous = new Map(
       current.trucks.map((entry) => [
         entry.id,
-        { driver: entry.driver, comment: entry.comment, device: entry.device },
+        { driver: entry.driver, comment: entry.comment, device: entry.device, mark: entry.mark },
       ])
     );
     const trucks = normalizeCameraTruckEntries(truckNumbers).map((entry) => ({
@@ -299,6 +328,7 @@ export function setCameraTrucks(truckNumbers, configPath = DEFAULT_CONFIG) {
       driver: entry.driver || previous.get(entry.id)?.driver || "",
       comment: entry.comment || previous.get(entry.id)?.comment || "",
       device: entry.device || previous.get(entry.id)?.device || "",
+      mark: entry.mark || previous.get(entry.id)?.mark || "",
     }));
     saveTruckEntries(current, trucks);
     return { trucks };

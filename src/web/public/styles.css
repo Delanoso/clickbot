@@ -787,9 +787,14 @@ a.btn.is-disabled {
   border-color: rgba(240, 179, 90, 0.55);
 }
 
-.reason-badge.reason-camera {
-  color: #7eb6ff;
-  border-color: rgba(126, 182, 255, 0.55);
+.reason-badge.mark-unavailable {
+  color: #f0a36a;
+  border-color: rgba(240, 163, 106, 0.65);
+}
+
+.reason-badge.mark-stale {
+  color: #c9b4ff;
+  border-color: rgba(201, 180, 255, 0.6);
 }
 
 .reason-eyebrow.reason-ppe { color: #5fe0a4; }

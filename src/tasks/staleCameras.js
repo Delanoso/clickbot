@@ -4,9 +4,10 @@ import {
   scanStaleCameraPages,
   setVehiclesPageSize,
 } from "../apps/lytxWakeTrucks.js";
+import { parseDeviceNumber } from "../utils/lastCommunicated.js";
 import { writeTaskStatus } from "../utils/taskStatus.js";
-import { lastCommunicatedComment, parseDeviceNumber } from "../utils/lastCommunicated.js";
-import { addCameraTruck, setCameraTruckComment } from "../web/cameraConfig.js";
+import { cameraMarkComment, cameraMarkLabel } from "../web/cameraMarks.js";
+import { addCameraTruck } from "../web/cameraConfig.js";
 
 /**
  * Stale Cameras — scan Lytx Vehicles Last communicated dates.
@@ -51,21 +52,23 @@ export async function runStaleCameras(config) {
 
       for (const row of result.stale) {
         const device = row.device || parseDeviceNumber(row.text) || "";
+        const mark = row.mark || "stale";
         try {
-          const saved = addCameraTruck(row.vehicleId, { device });
-          if (saved.added) {
-            addedCount += 1;
-            setCameraTruckComment(row.vehicleId, lastCommunicatedComment(row.lastCommunicated));
-          } else if (saved.updated) {
-            updatedCount += 1;
-          } else {
-            alreadyListed += 1;
-          }
+          const saved = addCameraTruck(row.vehicleId, {
+            device,
+            mark,
+            comment: cameraMarkComment(mark, row.lastCommunicated),
+          });
+          if (saved.added) addedCount += 1;
+          else if (saved.updated) updatedCount += 1;
+          else alreadyListed += 1;
           applied.push({
             vehicleId: row.vehicleId,
             device: saved.device || device,
             lastCommunicated: row.lastCommunicated || "",
-            reason: row.reason,
+            mark,
+            markLabel: cameraMarkLabel(mark),
+            reason: mark,
             added: saved.added,
             updated: saved.updated,
           });
@@ -99,6 +102,8 @@ export async function runStaleCameras(config) {
         updated: updatedCount,
         alreadyListed,
         staleCount: result.stale.length,
+        notAvailableCount: result.notAvailableCount,
+        staleDateCount: result.staleDateCount,
         scanned: result.scanned,
         skippedRecent: result.skippedRecent,
         skippedUnparsed: result.skippedUnparsed,
@@ -148,6 +153,19 @@ function buildRunSummary({
   alreadyListed,
 }) {
   const trucks = applied.map((row) => row.vehicleId);
+  const notAvailableIds = applied
+    .filter((row) => row.mark === "not_available")
+    .map((row) => row.vehicleId);
+  const staleDateIds = applied
+    .filter((row) => row.mark === "stale")
+    .map((row) => row.vehicleId);
+  const copyParts = [];
+  if (notAvailableIds.length) {
+    copyParts.push(`NOT AVAILABLE:\n${notAvailableIds.join(", ")}`);
+  }
+  if (staleDateIds.length) {
+    copyParts.push(`OLD LAST COMMUNICATED:\n${staleDateIds.join(", ")}`);
+  }
   return {
     login: "OK",
     maxAgeDays,
@@ -157,6 +175,8 @@ function buildRunSummary({
     pagesScanned: `${result.pages} of ${result.maxPages}`,
     scanned: result.scanned,
     staleCount: result.stale.length,
+    notAvailableCount: result.notAvailableCount || 0,
+    staleDateCount: result.staleDateCount || 0,
     addedCount,
     updatedCount,
     alreadyListed,
@@ -164,9 +184,9 @@ function buildRunSummary({
     skippedUnparsed: result.skippedUnparsed,
     pageResults: result.pageResults,
     staleTrucks: applied,
-    copyPasteCsv: trucks.join(", "),
+    copyPasteCsv: copyParts.join("\n\n") || trucks.join(", "),
     warnings: result.warnings,
-    dashboardMessage: `${result.stale.length} stale · ${addedCount} added to camera list`,
+    dashboardMessage: `${result.notAvailableCount || 0} not available · ${result.staleDateCount || 0} old dates · ${addedCount} added`,
   };
 }
 
@@ -177,22 +197,25 @@ function printRunSummary(summary) {
   console.log(`Page size:      ${summary.pageSize}`);
   console.log(`Pages scanned:  ${summary.pagesScanned}`);
   console.log(`Vehicles:       ${summary.scanned}`);
-  console.log(`Stale:          ${summary.staleCount}`);
+  console.log(`Not available:  ${summary.notAvailableCount}`);
+  console.log(`Old dates:      ${summary.staleDateCount}`);
   console.log(`Added:          ${summary.addedCount}`);
   console.log(`Updated device: ${summary.updatedCount}`);
   console.log(`Already listed: ${summary.alreadyListed}`);
   console.log("");
   console.log("Per page:");
   for (const page of summary.pageResults) {
-    console.log(`  Page ${page.pageNum}/${page.maxPages}: ${page.rows} rows → ${page.stale} stale`);
+    console.log(
+      `  Page ${page.pageNum}/${page.maxPages}: ${page.rows} rows → ${page.notAvailable || 0} not available, ${page.staleDate || page.stale || 0} old dates`
+    );
   }
 
   if (summary.staleTrucks.length) {
-    console.log("\n=== STALE TRUCKS (truck, device, last communicated) ===");
+    console.log("\n=== CAMERA LIST HITS (truck, mark, device, last communicated) ===");
     for (const row of summary.staleTrucks) {
       const action = row.added ? "added" : row.updated ? "updated" : "already listed";
       console.log(
-        `  ${row.vehicleId}  ${row.device || "—"}  ${row.lastCommunicated || "none"}  (${action})`
+        `  ${row.vehicleId}  ${row.markLabel || row.mark}  ${row.device || "—"}  ${row.lastCommunicated || "none"}  (${action})`
       );
     }
     console.log("\n=== comma-separated ===");

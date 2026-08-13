@@ -7,12 +7,14 @@ import {
   getCameraSnapshot,
 } from "./taskManager.js";
 import { normalizeReason, reasonLabel } from "./trackingReasons.js";
+import { cameraMarkLabel } from "./cameraMarks.js";
 
 export const TRACKING_EXPORT_HEADER = [
   "Truck",
   "Device",
   "Driver",
   "Comment",
+  "Mark",
   "Reason",
   "Zone",
   "In Depot",
@@ -62,6 +64,7 @@ function exportRowValues(truck, live, reasonText) {
     truck.device || "",
     truck.driver || "",
     truck.comment || "",
+    cameraMarkLabel(truck.mark) || truck.mark || "",
     reasonText,
     zone,
     inDepot ? "YES" : "NO",

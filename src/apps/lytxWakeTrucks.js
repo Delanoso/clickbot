@@ -1,10 +1,8 @@
 /**
  * Lytx Video Search → Vehicles → Wake / Retry automation.
  */
-import {
-  classifyLastCommunicated,
-  parseDeviceNumber,
-} from "../utils/lastCommunicated.js";
+import { classifyCameraScanRow } from "../web/cameraMarks.js";
+import { parseDeviceNumber } from "../utils/lastCommunicated.js";
 
 const VEHICLE_LIST_URLS = [
   "https://app.lytx.com/#/lvs/vehicles",
@@ -672,7 +670,7 @@ export async function runWakePass(page, { clickDelayMs = 1000, passNumber = 1 } 
   let clicked = 0;
   let pages = 0;
   const clickedVehicles = [];
-  const notAvailableVehicles = new Set();
+  const notAvailableVehicles = new Map();
   const pageResults = [];
   const warnings = [];
   const { total } = await readPagination(page);
@@ -683,7 +681,10 @@ export async function runWakePass(page, { clickDelayMs = 1000, passNumber = 1 } 
     const rows = await scanVehicleRows(page);
     for (const row of rows) {
       if (row.status === "not_available") {
-        notAvailableVehicles.add(row.vehicleId);
+        notAvailableVehicles.set(
+          row.vehicleId,
+          row.device || notAvailableVehicles.get(row.vehicleId) || ""
+        );
       }
     }
     const targets = rows.filter(shouldClickWake);
@@ -746,7 +747,10 @@ export async function runWakePass(page, { clickDelayMs = 1000, passNumber = 1 } 
     maxPages,
     pageResults,
     clickedVehicles,
-    notAvailableVehicles: [...notAvailableVehicles],
+    notAvailableVehicles: [...notAvailableVehicles.entries()].map(([vehicleId, device]) => ({
+      vehicleId,
+      device,
+    })),
     warnings,
   };
 }
@@ -825,42 +829,56 @@ export async function scanStaleCameraPages(page, { maxAgeDays = 2, now = new Dat
   let scanned = 0;
   let skippedRecent = 0;
   let skippedUnparsed = 0;
+  let notAvailableCount = 0;
+  let staleDateCount = 0;
 
   for (let pageNum = 1; pageNum <= maxPages; pageNum += 1) {
     const rows = await scanVehicleRows(page);
-    let pageStale = 0;
+    let pageNotAvailable = 0;
+    let pageStaleDate = 0;
     for (const row of rows) {
       if (seen.has(row.vehicleId)) continue;
       seen.add(row.vehicleId);
       scanned += 1;
-      const verdict = classifyLastCommunicated(row.lastCommunicated, { maxAgeDays, now });
-      if (verdict.reason === "recent") {
-        skippedRecent += 1;
+      const verdict = classifyCameraScanRow(row, { maxAgeDays, now });
+      if (!verdict.include) {
+        if (verdict.dateReason === "unparsed") {
+          skippedUnparsed += 1;
+          console.log(
+            `[stale-cameras] Skip ${row.vehicleId} — could not parse last communicated (${row.lastCommunicated || "empty"})`
+          );
+        } else {
+          skippedRecent += 1;
+        }
         continue;
       }
-      if (verdict.reason === "unparsed") {
-        skippedUnparsed += 1;
-        console.log(
-          `[stale-cameras] Skip ${row.vehicleId} — could not parse last communicated (${row.lastCommunicated || "empty"})`
-        );
-        continue;
+      if (verdict.mark === "not_available") {
+        pageNotAvailable += 1;
+        notAvailableCount += 1;
+      } else {
+        pageStaleDate += 1;
+        staleDateCount += 1;
       }
-      pageStale += 1;
       stale.push({
         vehicleId: row.vehicleId,
         device: row.device || parseDeviceNumber(row.text) || "",
         lastCommunicated: row.lastCommunicated || "",
-        reason: verdict.reason,
+        mark: verdict.mark,
+        reason: verdict.mark,
+        dateReason: verdict.dateReason,
+        status: row.status,
       });
     }
     console.log(
-      `[stale-cameras] Page ${pageNum}/${maxPages}: ${rows.length} rows, ${pageStale} stale`
+      `[stale-cameras] Page ${pageNum}/${maxPages}: ${rows.length} rows, ${pageNotAvailable} not available, ${pageStaleDate} old dates`
     );
     pageResults.push({
       pageNum,
       maxPages,
       rows: rows.length,
-      stale: pageStale,
+      notAvailable: pageNotAvailable,
+      staleDate: pageStaleDate,
+      stale: pageNotAvailable + pageStaleDate,
     });
 
     if (pageNum >= maxPages) break;
@@ -874,12 +892,17 @@ export async function scanStaleCameraPages(page, { maxAgeDays = 2, now = new Dat
     await waitForVehicleRows(page, 1, 15000);
   }
 
-  stale.sort((a, b) => a.vehicleId.localeCompare(b.vehicleId));
+  stale.sort((a, b) => {
+    if (a.mark !== b.mark) return a.mark === "not_available" ? -1 : 1;
+    return a.vehicleId.localeCompare(b.vehicleId);
+  });
   return {
     stale,
     scanned,
     skippedRecent,
     skippedUnparsed,
+    notAvailableCount,
+    staleDateCount,
     pages: pageResults.length,
     maxPages,
     pageResults,

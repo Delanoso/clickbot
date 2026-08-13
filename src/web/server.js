@@ -874,6 +874,8 @@ async function handleApi(req, res, url) {
           reasonLabel: reasonLabel(reason),
           driver: cfg.driver || row.driver || "",
           comment: cfg.comment || row.comment || "",
+          device: cfg.device || row.device || "",
+          mark: cfg.mark || row.mark || "",
           inDepot:
             row.inDepot != null ? Boolean(row.inDepot) : Boolean(row.inTargetArea),
           inJohannesburg: Boolean(row.inJohannesburg),

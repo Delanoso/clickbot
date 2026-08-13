@@ -1,3 +1,5 @@
+import { cameraMarkBadgeHtml, escapeHtml } from "./tracking-shared.js";
+
 const hostLine = document.getElementById("hostLine");
 const clockLine = document.getElementById("clockLine");
 const staleDot = document.getElementById("staleDot");
@@ -7,12 +9,14 @@ const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 const staleCount = document.getElementById("staleCount");
 const pagesDetail = document.getElementById("pagesDetail");
+const unavailableDetail = document.getElementById("unavailableDetail");
+const oldDateDetail = document.getElementById("oldDateDetail");
 const addedDetail = document.getElementById("addedDetail");
-const resultDetail = document.getElementById("resultDetail");
 const truckList = document.getElementById("truckList");
 const copyBtn = document.getElementById("copyBtn");
 const copyNote = document.getElementById("copyNote");
-const staleList = document.getElementById("staleList");
+const unavailableList = document.getElementById("unavailableList");
+const staleDateList = document.getElementById("staleDateList");
 const logView = document.getElementById("logView");
 
 let lastCsv = "";
@@ -47,8 +51,27 @@ async function controlTask(action) {
 
 function actionLabel(row) {
   if (row.added) return "Added";
-  if (row.updated) return "Device updated";
+  if (row.updated) return "Updated";
   return "Already listed";
+}
+
+function renderHitList(el, rows, emptyMessage) {
+  if (!rows.length) {
+    el.innerHTML = `<p class="empty-note">${escapeHtml(emptyMessage)}</p>`;
+    return;
+  }
+  el.innerHTML = rows
+    .map((row) => {
+      const device = row.device || "no device";
+      const last = row.lastCommunicated || "none";
+      return `<div class="watch-row${row.added ? " in" : ""}">
+        <div>
+          <strong>${escapeHtml(row.vehicleId)} ${cameraMarkBadgeHtml(row.mark)}</strong>
+          <span>${escapeHtml(device)} · ${escapeHtml(last)} · ${escapeHtml(actionLabel(row))}</span>
+        </div>
+      </div>`;
+    })
+    .join("");
 }
 
 function renderStale(task) {
@@ -60,50 +83,49 @@ function renderStale(task) {
   staleState.textContent = state;
   staleDot.className = `status-dot ${state}`;
   staleMessage.textContent =
-    status.message || (task?.running ? "Scanning Last communicated…" : "Ready to scan Last communicated");
+    status.message || (task?.running ? "Scanning Vehicles…" : "Ready to scan Last communicated");
 
   const summary = status.summary || {};
   const trucks = summary.staleTrucks || status.staleTrucks || [];
-  const csv = summary.copyPasteCsv || (trucks.length ? trucks.map((row) => row.vehicleId).join(", ") : "");
+  const unavailable = trucks.filter((row) => row.mark === "not_available");
+  const oldDates = trucks.filter((row) => row.mark !== "not_available");
+  const csv = summary.copyPasteCsv || "";
   const total = summary.staleCount ?? status.staleCount ?? trucks.length ?? 0;
   const added = summary.addedCount ?? status.added ?? 0;
+  const unavailableCount =
+    summary.notAvailableCount ?? status.notAvailableCount ?? unavailable.length;
+  const oldDateCount = summary.staleDateCount ?? status.staleDateCount ?? oldDates.length;
 
   staleCount.textContent = String(total);
   pagesDetail.textContent =
     summary.pagesScanned ||
     (status.pagesScanned != null ? `${status.pagesScanned} of ${status.maxPages || "?"}` : "—");
+  unavailableDetail.textContent = task?.running ? "…" : String(unavailableCount);
+  oldDateDetail.textContent = task?.running ? "…" : String(oldDateCount);
   addedDetail.textContent = task?.running ? "…" : String(added);
-  resultDetail.textContent = summary.dashboardMessage || status.message || "—";
 
   lastCsv = csv;
   if (csv) {
-    truckList.textContent = `${csv}\n\nTotal stale trucks: ${total}`;
+    truckList.textContent = csv;
     copyBtn.disabled = false;
   } else if (task?.running) {
-    truckList.textContent = "Scan running… list appears when finished.";
+    truckList.textContent = "Scan running… lists appear when finished.";
     copyBtn.disabled = true;
   } else {
-    truckList.textContent = "Run a scan to list trucks older than 2 days.";
+    truckList.textContent = "Run a scan to list not-available and old-date trucks.";
     copyBtn.disabled = true;
   }
 
-  staleList.innerHTML = "";
-  for (const row of trucks) {
-    const el = document.createElement("div");
-    el.className = `watch-row${row.added ? " in" : ""}`;
-    const device = row.device || "no device";
-    const last = row.lastCommunicated || "none";
-    el.innerHTML = `<div><strong>${escapeHtml(row.vehicleId)}</strong><span>${escapeHtml(device)} · ${escapeHtml(last)} · ${escapeHtml(actionLabel(row))}</span></div>`;
-    staleList.appendChild(el);
-  }
-}
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  renderHitList(
+    unavailableList,
+    unavailable,
+    task?.running ? "Scanning…" : "No Not available trucks this run."
+  );
+  renderHitList(
+    staleDateList,
+    oldDates,
+    task?.running ? "Scanning…" : "No working cameras older than 2 days this run."
+  );
 }
 
 async function refreshLogs() {

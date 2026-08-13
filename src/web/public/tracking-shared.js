@@ -55,6 +55,19 @@ export async function downloadExportFile(url, fallbackName = "tracking-export.cs
   setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 }
 
+export function cameraMarkLabel(mark) {
+  if (mark === "not_available") return "Not available";
+  if (mark === "stale") return "Old last communicated";
+  return "";
+}
+
+export function cameraMarkBadgeHtml(mark) {
+  const label = cameraMarkLabel(mark);
+  if (!label) return "";
+  const tone = mark === "not_available" ? "unavailable" : "stale";
+  return `<span class="reason-badge mark-${tone}">${escapeHtml(label)}</span>`;
+}
+
 export function reasonBadgeHtml(reason) {
   const meta = REASON_META[reason] || { short: reason || "?", tone: "other" };
   return `<span class="reason-badge reason-${meta.tone}">${escapeHtml(meta.short)}</span>`;

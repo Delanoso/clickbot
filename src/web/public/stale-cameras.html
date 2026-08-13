@@ -25,7 +25,8 @@
       <p class="eyebrow">Lytx Video Search</p>
       <h1 class="brand brand-sm">Stale Cameras</h1>
       <p class="lede">
-        Scan Last communicated on the Vehicles list. If a truck is older than 2 days, add it to
+        Scan Vehicles. <strong>Not available, No Recent Activity</strong> is marked separately from
+        trucks that still work but whose last communicated date is older than 2 days. Both go onto
         Truck Camera with the device number.
       </p>
       <div class="hero-meta">
@@ -55,34 +56,39 @@
           <div>
             <h2>Last communicated scan</h2>
             <p>
-              One pass through Lytx Vehicles. Only the Last communicated date is checked — no Wake
-              or Retry clicks. Trucks older than 2 days (or with no date) go onto the Truck Camera
-              list with their device number.
+              One pass through Lytx Vehicles. No Wake or Retry clicks. Not available trucks and
+              old-date trucks are added to Truck Camera with different marks.
             </p>
           </div>
           <div class="count-block">
-            <span class="count-label">Stale</span>
+            <span class="count-label">Hits</span>
             <strong id="staleCount">0</strong>
           </div>
         </div>
 
         <dl class="task-stats wake-stage-stats">
           <div><dt>Pages</dt><dd id="pagesDetail">—</dd></div>
+          <div><dt>Not available</dt><dd id="unavailableDetail">—</dd></div>
+          <div><dt>Old dates</dt><dd id="oldDateDetail">—</dd></div>
           <div><dt>Added</dt><dd id="addedDetail">—</dd></div>
-          <div><dt>Result</dt><dd id="resultDetail">—</dd></div>
         </dl>
 
         <div class="section-subhead">
-          <h3>Stale trucks — comma-separated</h3>
-          <button type="button" class="btn" id="copyBtn" disabled>Copy list</button>
+          <h3>Copy lists</h3>
+          <button type="button" class="btn" id="copyBtn" disabled>Copy lists</button>
         </div>
-        <pre id="truckList" class="log-view wake-truck-list">Run a scan to list trucks older than 2 days.</pre>
+        <pre id="truckList" class="log-view wake-truck-list">Run a scan to list not-available and old-date trucks.</pre>
         <p id="copyNote" class="form-note"></p>
 
         <div class="section-subhead">
-          <h3>Added to Truck Camera</h3>
+          <h3>Not available, No Recent Activity</h3>
         </div>
-        <div id="staleList" class="watch-list"></div>
+        <div id="unavailableList" class="watch-list"></div>
+
+        <div class="section-subhead">
+          <h3>Working cameras — last communicated older than 2 days</h3>
+        </div>
+        <div id="staleDateList" class="watch-list"></div>
       </section>
 
       <section class="log-board" aria-label="Stale Cameras log">
@@ -96,6 +102,6 @@
       </section>
     </main>
 
-    <script type="module" src="/stale-cameras.js?v=20260813a"></script>
+    <script type="module" src="/stale-cameras.js?v=20260813m"></script>
   </body>
 </html>

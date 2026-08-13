@@ -1,4 +1,4 @@
-import { mountTrackingSubnav, reasonBadgeHtml, escapeHtml, REASON_META, downloadExportFile } from "./tracking-shared.js";
+import { mountTrackingSubnav, reasonBadgeHtml, cameraMarkBadgeHtml, escapeHtml, REASON_META, downloadExportFile } from "./tracking-shared.js";
 
 mountTrackingSubnav("overview");
 
@@ -99,7 +99,7 @@ function renderWatchList(trucks) {
       const comment = entry.comment ? ` · ${escapeHtml(entry.comment)}` : "";
       return `<div class="watch-row">
         <div>
-          <strong>${escapeHtml(entry.id)}</strong> ${reasonBadgeHtml(reason)}
+          <strong>${escapeHtml(entry.id)}</strong> ${reasonBadgeHtml(reason)}${reason === "camera" ? cameraMarkBadgeHtml(entry.mark) : ""}
           <span>${driver}${device}${comment}</span>
         </div>
         <button type="button" class="btn danger-btn" data-remove="${escapeHtml(entry.id)}" data-reason="${escapeHtml(reason)}" ${busy ? "disabled" : ""}>Remove</button>
@@ -159,7 +159,7 @@ function renderZoneList(el, rows, emptyMessage) {
       const comment = row.comment || "";
       const location = row.locationText || row.location || "—";
       return `<div class="truck-row">
-        <strong>${escapeHtml(row.truckNumber || row.id)} ${reasonBadgeHtml(reason)}</strong>
+        <strong>${escapeHtml(row.truckNumber || row.id)} ${reasonBadgeHtml(reason)}${reason === "camera" ? cameraMarkBadgeHtml(row.mark) : ""}</strong>
         <span>${escapeHtml(driver || "No driver yet")}${
           comment ? ` · ${escapeHtml(comment)}` : ""
         }<br />${escapeHtml(location)}
@@ -218,7 +218,7 @@ function renderBoards(live) {
       const driver = row.driverName || row.driver || "No driver";
       const comment = row.comment ? ` · ${escapeHtml(row.comment)}` : "";
       return `<div class="truck-chip ${cls}">
-        <strong>${escapeHtml(row.truckNumber || row.id)} ${reasonBadgeHtml(reason)}</strong>
+        <strong>${escapeHtml(row.truckNumber || row.id)} ${reasonBadgeHtml(reason)}${reason === "camera" ? cameraMarkBadgeHtml(row.mark) : ""}</strong>
         <span>${zoneLabel(zone)} · ${escapeHtml(driver)}${comment}<br />${escapeHtml(
           row.locationText || "—"
         )}</span>
