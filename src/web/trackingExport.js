@@ -103,13 +103,17 @@ export function buildExportRow(
   ];
 }
 
-/** Flatten newlines so Excel does not insert blank rows between cells. */
-export function csvCell(value) {
-  const text = String(value ?? "")
+function flattenText(value) {
+  return String(value ?? "")
     .replace(/\r\n/g, " ")
     .replace(/[\r\n\u2028\u2029]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** Flatten newlines so Excel does not insert blank rows between cells. */
+export function csvCell(value) {
+  const text = flattenText(value);
   if (/[",]/.test(text)) {
     return `"${text.replace(/"/g, '""')}"`;
   }
@@ -117,7 +121,7 @@ export function csvCell(value) {
 }
 
 function htmlCell(value) {
-  return String(value ?? "")
+  return flattenText(value)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -227,8 +231,9 @@ export function buildTrackingExportCsv(reason, configPath = "config/local.json")
     header.map(csvCell).join(","),
     ...rows.map((row) => row.map(csvCell).join(",")),
   ];
-  // sep= helps Excel pick comma delimiter; BOM + CRLF for Windows Excel.
-  return `\uFEFFsep=,\r\n${lines.join("\r\n")}\r\n`;
+  // LF only. Excel on Windows treats CRLF as two row breaks in UTF-8 CSV,
+  // which inserts a blank line between every truck.
+  return `\uFEFFsep=,\n${lines.join("\n")}\n`;
 }
 
 /** HTML table opens reliably in Excel desktop and mobile (legacy .xls trick). */
@@ -248,21 +253,8 @@ export function buildTrackingExportExcelHtml(
     })
     .join("");
 
-  return `\uFEFF<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
-<head>
-<meta charset="utf-8" />
-<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
-<x:Name>Tracking</x:Name>
-<x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
-</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
-</head>
-<body>
-<table border="1" cellspacing="0" cellpadding="4">
-<thead><tr>${head}</tr></thead>
-<tbody>${body}</tbody>
-</table>
-</body>
-</html>`;
+  // Compact HTML so Excel does not turn source newlines into blank worksheet rows.
+  return `\uFEFF<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8" /><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Tracking</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body><table border="1" cellspacing="0" cellpadding="4"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></body></html>`;
 }
 
 export function trackingExportFilename(reason, { excel = true } = {}) {

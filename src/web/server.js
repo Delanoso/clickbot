@@ -459,16 +459,16 @@ function buildIncidentsExportCsv() {
 
 function sendTrackingExport(res, reason) {
   try {
-    const csv = buildTrackingExportCsv(reason, CONFIG_PATH);
-    const filename = trackingExportFilename(reason, { excel: false });
+    const body = buildTrackingExportExcelHtml(reason, CONFIG_PATH);
+    const filename = trackingExportFilename(reason, { excel: true });
     res.writeHead(200, {
-      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Type": "application/vnd.ms-excel; charset=utf-8",
       "Content-Disposition": `attachment; filename="${filename}"`,
       "Cache-Control": "no-store, no-cache, must-revalidate",
       "X-Content-Type-Options": "nosniff",
       Pragma: "no-cache",
     });
-    res.end(csv);
+    res.end(body);
   } catch (error) {
     sendJson(res, 400, { error: error.message || String(error) });
   }

@@ -45,7 +45,7 @@ stopBtn.addEventListener("click", () => controlTask("stop"));
 
 exportBtn.addEventListener("click", (event) => {
   event.preventDefault();
-  void downloadExportFile(`/api/camera/export?t=${Date.now()}`, "truck-camera.csv").catch(
+  void downloadExportFile(`/api/camera/export?t=${Date.now()}`, "truck-camera.xls").catch(
     (error) => {
       truckFormNote.textContent = error.message || "Export failed";
     }

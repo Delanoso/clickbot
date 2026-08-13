@@ -32,8 +32,8 @@ export function trackingSubnavHtml(active) {
 }
 
 /** Fetch export and save as a file — works on iPad Safari (avoids in-browser preview). */
-export async function downloadExportFile(url, fallbackName = "tracking-export.csv") {
-  const res = await fetch(url, { headers: { Accept: "text/csv" } });
+export async function downloadExportFile(url, fallbackName = "tracking-export.xls") {
+  const res = await fetch(url);
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error || `Export failed (${res.status})`);

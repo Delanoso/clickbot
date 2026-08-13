@@ -38,14 +38,14 @@ exportBtn?.addEventListener("click", (event) => {
   event.preventDefault();
   const reason = exportReason?.value || "all";
   const names = {
-    all: "all-tracking.csv",
-    ppe: "driver-ppe.csv",
-    incident: "driver-incident.csv",
-    camera: "truck-camera.csv",
+    all: "all-tracking.xls",
+    ppe: "driver-ppe.xls",
+    incident: "driver-incident.xls",
+    camera: "truck-camera.xls",
   };
   void downloadExportFile(
     `/api/tracking/export?reason=${encodeURIComponent(reason)}&t=${Date.now()}`,
-    names[reason] || "tracking-export.csv"
+    names[reason] || "tracking-export.xls"
   ).catch((error) => {
     truckFormNote.textContent = error.message || "Export failed";
   });

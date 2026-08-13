@@ -1,6 +1,7 @@
 import {
   buildExportRow,
   CAMERA_EXPORT_HEADER,
+  csvCell,
   trackingExportHeader,
   TRACKING_EXPORT_HEADER,
 } from "./trackingExport.js";
@@ -71,5 +72,10 @@ assert(allRow[2] === "Jane Doe", "all tracking keeps driver");
 assert(allRow[3] === "Old last communicated", "all tracking tag");
 assert(allRow[4].startsWith("Last communicated"), "all tracking comment");
 assert(allRow[5] === "Truck Camera", "all tracking reason");
+
+assert(csvCell("line1\r\nline2") === "line1 line2", "csv cells flatten CRLF");
+assert(csvCell("line1\nline2") === "line1 line2", "csv cells flatten LF");
+assert(!csvCell("a\r\nb").includes("\r"), "csv cells contain no CR");
+assert(!csvCell("a\r\nb").includes("\n"), "csv cells contain no LF");
 
 console.log("trackingExport tests passed");
