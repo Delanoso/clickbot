@@ -50,6 +50,10 @@
     "pageSize": 100,
     "clickDelayMs": 1000
   },
+  "staleCameras": {
+    "pageSize": 100,
+    "maxAgeDays": 2
+  },
   "apps": {
     "dispatch": {
       "url": "https://login.lytx.com",

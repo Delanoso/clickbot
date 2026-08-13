@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Stale Cameras · clickbot</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="atmosphere" aria-hidden="true"></div>
+    <header class="hero hero-compact">
+      <nav class="top-nav">
+        <a class="nav-link" href="/">Home</a>
+        <a class="nav-link" href="/tracking">Tracking</a>
+        <a class="nav-link" href="/wake-trucks">Wake Trucks</a>
+        <a class="nav-link active" href="/stale-cameras">Stale Cameras</a>
+        <a class="nav-link" href="/notes">Notes</a>
+      </nav>
+      <p class="eyebrow">Lytx Video Search</p>
+      <h1 class="brand brand-sm">Stale Cameras</h1>
+      <p class="lede">
+        Scan Last communicated on the Vehicles list. If a truck is older than 2 days, add it to
+        Truck Camera with the device number.
+      </p>
+      <div class="hero-meta">
+        <span id="hostLine">Starting…</span>
+        <span id="clockLine"></span>
+      </div>
+    </header>
+
+    <main class="depot-main">
+      <section class="control-bar">
+        <div class="control-status">
+          <span class="status-dot" id="staleDot"></span>
+          <div>
+            <strong id="staleState">idle</strong>
+            <p id="staleMessage">Ready to scan Last communicated</p>
+          </div>
+        </div>
+        <div class="task-actions">
+          <a class="btn" href="/tracking/camera">Open Truck Camera</a>
+          <button type="button" class="btn primary" id="startBtn">Start scan</button>
+          <button type="button" class="btn" id="stopBtn">Stop</button>
+        </div>
+      </section>
+
+      <section class="truck-manager" aria-label="Stale camera scan">
+        <div class="section-head">
+          <div>
+            <h2>Last communicated scan</h2>
+            <p>
+              One pass through Lytx Vehicles. Only the Last communicated date is checked — no Wake
+              or Retry clicks. Trucks older than 2 days (or with no date) go onto the Truck Camera
+              list with their device number.
+            </p>
+          </div>
+          <div class="count-block">
+            <span class="count-label">Stale</span>
+            <strong id="staleCount">0</strong>
+          </div>
+        </div>
+
+        <dl class="task-stats wake-stage-stats">
+          <div><dt>Pages</dt><dd id="pagesDetail">—</dd></div>
+          <div><dt>Added</dt><dd id="addedDetail">—</dd></div>
+          <div><dt>Result</dt><dd id="resultDetail">—</dd></div>
+        </dl>
+
+        <div class="section-subhead">
+          <h3>Stale trucks — comma-separated</h3>
+          <button type="button" class="btn" id="copyBtn" disabled>Copy list</button>
+        </div>
+        <pre id="truckList" class="log-view wake-truck-list">Run a scan to list trucks older than 2 days.</pre>
+        <p id="copyNote" class="form-note"></p>
+
+        <div class="section-subhead">
+          <h3>Added to Truck Camera</h3>
+        </div>
+        <div id="staleList" class="watch-list"></div>
+      </section>
+
+      <section class="log-board" aria-label="Stale Cameras log">
+        <div class="section-head">
+          <div>
+            <h2>Activity</h2>
+            <p>Latest scan lines, including the run summary.</p>
+          </div>
+        </div>
+        <pre id="logView" class="log-view">No log lines yet.</pre>
+      </section>
+    </main>
+
+    <script type="module" src="/stale-cameras.js?v=20260813a"></script>
+  </body>
+</html>

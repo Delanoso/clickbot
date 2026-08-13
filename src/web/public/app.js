@@ -10,6 +10,9 @@ const notesHomeDetail = document.getElementById("notesHomeDetail");
 const wakeDot = document.getElementById("wakeDot");
 const wakeState = document.getElementById("wakeState");
 const wakeDetail = document.getElementById("wakeDetail");
+const staleDot = document.getElementById("staleDot");
+const staleState = document.getElementById("staleState");
+const staleDetail = document.getElementById("staleDetail");
 
 let selectedLogTask = "allocate-drivers";
 
@@ -80,6 +83,22 @@ function renderTasks(tasks) {
       continue;
     }
 
+    if (task.id === "stale-cameras") {
+      if (staleState && staleDot && staleDetail) {
+        const state = task.running
+          ? "running"
+          : task.status?.state || (task.exitCode != null ? "stopped" : "idle");
+        staleState.textContent = state;
+        staleDot.className = `status-dot ${state}`;
+        staleDetail.textContent =
+          task.status?.summary?.dashboardMessage ||
+          (task.status?.staleCount != null
+            ? `${task.status.staleCount} stale`
+            : task.status?.message || "—");
+      }
+      continue;
+    }
+
     const panel = document.querySelector(`[data-task="${task.id}"]`);
     if (!panel) continue;
     const state = task.running
@@ -104,7 +123,7 @@ function renderTasks(tasks) {
 
   const homeTasks = tasks.filter(
     (task) =>
-      !trackingIds.includes(task.id) && task.id !== "wake-trucks"
+      !trackingIds.includes(task.id) && task.id !== "wake-trucks" && task.id !== "stale-cameras"
   );
   logTabs.innerHTML = "";
   for (const task of homeTasks) {

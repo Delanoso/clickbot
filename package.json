@@ -12,11 +12,12 @@
     "depot": "node src/index.js depot-monitor",
     "incidents": "node src/index.js incidents-monitor",
     "wake": "node src/index.js wake-trucks",
+    "stale-cameras": "node src/index.js stale-cameras",
     "dashboard": "node src/web/server.js",
     "explore": "node src/explore.js",
     "demo:server": "node demo/server.js",
     "demo": "node scripts/run-demo.mjs",
-    "test": "node src/utils/driverName.test.js && node src/utils/depotMonitor.test.js && node src/utils/locationClassifier.test.js",
+    "test": "node src/utils/driverName.test.js && node src/utils/depotMonitor.test.js && node src/utils/locationClassifier.test.js && node src/utils/lastCommunicated.test.js",
     "verify:names": "node scripts/verifyDriverNames.js",
     "install-browsers": "playwright install chromium"
   },
