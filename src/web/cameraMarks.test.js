@@ -49,6 +49,16 @@ const workingOld = classifyCameraScanRow(
 );
 assert(workingOld.include && workingOld.mark === "stale", "working truck with old date is stale");
 
+const workingEleventh = classifyCameraScanRow(
+  {
+    status: "wake",
+    lastCommunicated: "11 Aug 2026, 23:50:00",
+    text: "R2293 Wake",
+  },
+  { maxAgeDays: 2, now }
+);
+assert(workingEleventh.include && workingEleventh.mark === "stale", "11th any time is listed when today is the 13th");
+
 const workingRecent = classifyCameraScanRow(
   {
     status: "wake",

@@ -52,11 +52,14 @@ assert(recent.reason === "recent", "reason should be recent");
 const liveSample = classifyLastCommunicated("Aug 4, 2026, 2:54:33 PM", { maxAgeDays: 2, now });
 assert(liveSample.stale === true, "Aug 4 should be stale on Aug 13");
 
-const justOver = classifyLastCommunicated("11 Aug 2026, 13:37:00", { maxAgeDays: 2, now });
-assert(justOver.stale === true, "just over 48 hours should be stale");
+const justOver = classifyLastCommunicated("11 Aug 2026, 23:59:59", { maxAgeDays: 2, now });
+assert(justOver.stale === true, "the 11th at any time is included when today is the 13th");
 
-const justUnder = classifyLastCommunicated("11 Aug 2026, 13:39:00", { maxAgeDays: 2, now });
-assert(justUnder.stale === false, "just under 48 hours should not be stale");
+const eleventhAfternoon = classifyLastCommunicated("Aug 11, 2026, 4:20:02 PM", { maxAgeDays: 2, now });
+assert(eleventhAfternoon.stale === true, "11th afternoon is included regardless of clock time");
+
+const twelfth = classifyLastCommunicated("12 Aug 2026, 00:00:01", { maxAgeDays: 2, now });
+assert(twelfth.stale === false, "the 12th is not included when today is the 13th");
 
 const missing = classifyLastCommunicated("—", { maxAgeDays: 2, now });
 assert(missing.stale === true && missing.reason === "missing", "no date should count as stale");

@@ -26,8 +26,8 @@
       <h1 class="brand brand-sm">Stale Cameras</h1>
       <p class="lede">
         Scan Vehicles. <strong>Not available, No Recent Activity</strong> is marked separately from
-        trucks that still work but whose last communicated date is older than 2 days. Both go onto
-        Truck Camera with the device number.
+        trucks that still work but last communicated on or before 2 days ago (if today is the 13th,
+        the 11th and earlier, any time). Both go onto Truck Camera with the device number.
       </p>
       <div class="hero-meta">
         <span id="hostLine">Starting…</span>
@@ -86,7 +86,7 @@
         <div id="unavailableList" class="watch-list"></div>
 
         <div class="section-subhead">
-          <h3>Working cameras — last communicated older than 2 days</h3>
+          <h3>Working cameras — last communicated on or before 2 days ago</h3>
         </div>
         <div id="staleDateList" class="watch-list"></div>
       </section>
@@ -102,6 +102,6 @@
       </section>
     </main>
 
-    <script type="module" src="/stale-cameras.js?v=20260813m"></script>
+    <script type="module" src="/stale-cameras.js?v=20260813n"></script>
   </body>
 </html>

@@ -29,7 +29,6 @@ const DMY_RE = new RegExp(
 );
 
 const DEVICE_RE = /\b((?:MV|QM)\d{4,})\b/i;
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export function parseDeviceNumber(text) {
   const match = String(text || "").match(DEVICE_RE);
@@ -104,6 +103,10 @@ export function parseLastCommunicated(raw) {
   return { kind: "unparsed", date: null, raw: text };
 }
 
+function startOfLocalDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
 export function classifyLastCommunicated(
   raw,
   { maxAgeDays = 2, now = new Date() } = {}
@@ -116,7 +119,12 @@ export function classifyLastCommunicated(
     return { stale: true, reason: "missing", date: null, ageMs: null, raw: parsed.raw };
   }
   const ageMs = now.getTime() - parsed.date.getTime();
-  const stale = ageMs > maxAgeDays * MS_PER_DAY;
+  // Calendar days, not 48 hours. If today is the 13th and maxAgeDays is 2,
+  // anything last communicated on the 11th (any time) or earlier is stale.
+  const commDay = startOfLocalDay(parsed.date);
+  const cutoff = startOfLocalDay(now);
+  cutoff.setDate(cutoff.getDate() - maxAgeDays);
+  const stale = commDay.getTime() <= cutoff.getTime();
   return {
     stale,
     reason: stale ? "older_than_max_age" : "recent",

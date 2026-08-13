@@ -124,7 +124,7 @@ function renderStale(task) {
   renderHitList(
     staleDateList,
     oldDates,
-    task?.running ? "Scanning…" : "No working cameras older than 2 days this run."
+    task?.running ? "Scanning…" : "No working cameras from 2 days ago or earlier this run."
   );
 }
 
