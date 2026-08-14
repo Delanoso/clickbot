@@ -783,8 +783,13 @@ a.btn.is-disabled {
 }
 
 .reason-badge.reason-incident {
-  color: #f0b35a;
-  border-color: rgba(240, 179, 90, 0.55);
+  color: #4d9fff;
+  border-color: rgba(77, 159, 255, 0.7);
+}
+
+.reason-badge.reason-camera {
+  color: #7eb6ff;
+  border-color: rgba(126, 182, 255, 0.55);
 }
 
 .reason-badge.mark-unavailable {
@@ -798,7 +803,7 @@ a.btn.is-disabled {
 }
 
 .reason-eyebrow.reason-ppe { color: #5fe0a4; }
-.reason-eyebrow.reason-incident { color: #f0b35a; }
+.reason-eyebrow.reason-incident { color: #4d9fff; }
 .reason-eyebrow.reason-camera { color: #7eb6ff; }
 
 .inline-link {
