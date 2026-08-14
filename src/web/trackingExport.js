@@ -7,27 +7,113 @@ import {
   getCameraSnapshot,
 } from "./taskManager.js";
 import { normalizeReason, reasonLabel } from "./trackingReasons.js";
+import { cameraMarkLabel } from "./cameraMarks.js";
 
+const REST_HEADER = ["Zone", "In Depot", "In Johannesburg", "Location", "Last Checked"];
+
+/** All-tracking sheet keeps Driver and includes Tag. */
 export const TRACKING_EXPORT_HEADER = [
+  "Truck",
+  "Device",
+  "Driver",
+  "Tag",
+  "Comment",
+  "Reason",
+  ...REST_HEADER,
+];
+
+/** Truck Camera sheet: Truck, Device, Tag, Comment, then location columns. No Driver. */
+export const CAMERA_EXPORT_HEADER = [
+  "Truck",
+  "Device",
+  "Tag",
+  "Comment",
+  ...REST_HEADER,
+];
+
+export const PPE_INCIDENT_EXPORT_HEADER = [
   "Truck",
   "Device",
   "Driver",
   "Comment",
   "Reason",
-  "Zone",
-  "In Depot",
-  "In Johannesburg",
-  "Location",
-  "Last Checked",
+  ...REST_HEADER,
 ];
 
-/** Flatten newlines so Excel does not insert blank rows between cells. */
-export function csvCell(value) {
-  const text = String(value ?? "")
+export function trackingExportLayout(reason) {
+  if (reason === "camera") return "camera";
+  if (reason === "all") return "all";
+  return "other";
+}
+
+export function trackingExportHeader(reason) {
+  const layout = trackingExportLayout(reason);
+  if (layout === "camera") return CAMERA_EXPORT_HEADER;
+  if (layout === "all") return TRACKING_EXPORT_HEADER;
+  return PPE_INCIDENT_EXPORT_HEADER;
+}
+
+function restValues(live) {
+  const inDepot =
+    live.inDepot != null ? Boolean(live.inDepot) : Boolean(live.inTargetArea);
+  const zone =
+    live.zone ||
+    (inDepot ? "depot" : live.inJohannesburg ? "johannesburg" : "other");
+  return [
+    zone,
+    inDepot ? "YES" : "NO",
+    live.inJohannesburg ? "YES" : "NO",
+    live.locationText || "",
+    live.checkedAt || "",
+  ];
+}
+
+export function truckTag(truck) {
+  return cameraMarkLabel(truck?.mark) || "";
+}
+
+export function buildExportRow(
+  truck,
+  live = {},
+  { reasonText = "", layout = "all" } = {}
+) {
+  const rest = restValues(live || {});
+  const tag = truckTag(truck);
+  if (layout === "camera") {
+    return [truck.id, truck.device || "", tag, truck.comment || "", ...rest];
+  }
+  if (layout === "all") {
+    return [
+      truck.id,
+      truck.device || "",
+      truck.driver || "",
+      tag,
+      truck.comment || "",
+      reasonText,
+      ...rest,
+    ];
+  }
+  return [
+    truck.id,
+    truck.device || "",
+    truck.driver || "",
+    truck.comment || "",
+    reasonText,
+    ...rest,
+  ];
+}
+
+function flattenText(value) {
+  return String(value ?? "")
     .replace(/\r\n/g, " ")
     .replace(/[\r\n\u2028\u2029]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** Flatten newlines so Excel does not insert blank rows between cells. */
+export function csvCell(value) {
+  const text = flattenText(value);
   if (/[",]/.test(text)) {
     return `"${text.replace(/"/g, '""')}"`;
   }
@@ -35,7 +121,7 @@ export function csvCell(value) {
 }
 
 function htmlCell(value) {
-  return String(value ?? "")
+  return flattenText(value)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -49,26 +135,6 @@ function liveById(snapshot) {
       row,
     ])
   );
-}
-
-function exportRowValues(truck, live, reasonText) {
-  const inDepot =
-    live.inDepot != null ? Boolean(live.inDepot) : Boolean(live.inTargetArea);
-  const zone =
-    live.zone ||
-    (inDepot ? "depot" : live.inJohannesburg ? "johannesburg" : "other");
-  return [
-    truck.id,
-    truck.device || "",
-    truck.driver || "",
-    truck.comment || "",
-    reasonText,
-    zone,
-    inDepot ? "YES" : "NO",
-    live.inJohannesburg ? "YES" : "NO",
-    live.locationText || "",
-    live.checkedAt || "",
-  ];
 }
 
 /** Longer prefixes first so NH/TH/HT don't land in H/T groups. */
@@ -102,11 +168,16 @@ export function sortExportTrucks(trucks) {
   return [...(trucks || [])].sort(compareExportTrucks);
 }
 
-function appendSection(rows, trucks, snapshot, reasonKey) {
+function appendSection(rows, trucks, snapshot, reasonKey, layout) {
   const live = liveById(snapshot);
   const label = reasonLabel(reasonKey);
   for (const truck of sortExportTrucks(trucks)) {
-    rows.push(exportRowValues(truck, live.get(truck.id) || {}, label));
+    rows.push(
+      buildExportRow(truck, live.get(truck.id) || {}, {
+        reasonText: label,
+        layout,
+      })
+    );
   }
 }
 
@@ -119,13 +190,15 @@ export function collectTrackingExportRows(reason, configPath = "config/local.jso
     throw new Error("reason must be all, ppe, incident, or camera");
   }
 
+  const layout = trackingExportLayout(normalized);
   const rows = [];
   if (normalized === "all" || normalized === "ppe") {
     appendSection(
       rows,
       readDepotConfig(configPath).trucks,
       getDepotSnapshot(),
-      "ppe"
+      "ppe",
+      layout
     );
   }
   if (normalized === "all" || normalized === "incident") {
@@ -133,7 +206,8 @@ export function collectTrackingExportRows(reason, configPath = "config/local.jso
       rows,
       readIncidentsConfig(configPath).trucks,
       getIncidentsSnapshot(),
-      "incident"
+      "incident",
+      layout
     );
   }
   if (normalized === "all" || normalized === "camera") {
@@ -141,20 +215,25 @@ export function collectTrackingExportRows(reason, configPath = "config/local.jso
       rows,
       readCameraConfig(configPath).trucks,
       getCameraSnapshot(),
-      "camera"
+      "camera",
+      layout
     );
   }
   return rows;
 }
 
 export function buildTrackingExportCsv(reason, configPath = "config/local.json") {
+  const raw = String(reason || "all").trim().toLowerCase();
+  const normalized = raw === "all" ? "all" : normalizeReason(reason);
+  const header = trackingExportHeader(normalized);
   const rows = collectTrackingExportRows(reason, configPath);
   const lines = [
-    TRACKING_EXPORT_HEADER.map(csvCell).join(","),
+    header.map(csvCell).join(","),
     ...rows.map((row) => row.map(csvCell).join(",")),
   ];
-  // sep= helps Excel pick comma delimiter; BOM + CRLF for Windows Excel.
-  return `\uFEFFsep=,\r\n${lines.join("\r\n")}\r\n`;
+  // LF only. Excel on Windows treats CRLF as two row breaks in UTF-8 CSV,
+  // which inserts a blank line between every truck.
+  return `\uFEFFsep=,\n${lines.join("\n")}\n`;
 }
 
 /** HTML table opens reliably in Excel desktop and mobile (legacy .xls trick). */
@@ -162,10 +241,11 @@ export function buildTrackingExportExcelHtml(
   reason,
   configPath = "config/local.json"
 ) {
+  const raw = String(reason || "all").trim().toLowerCase();
+  const normalized = raw === "all" ? "all" : normalizeReason(reason);
+  const header = trackingExportHeader(normalized);
   const rows = collectTrackingExportRows(reason, configPath);
-  const head = TRACKING_EXPORT_HEADER.map(
-    (label) => `<th>${htmlCell(label)}</th>`
-  ).join("");
+  const head = header.map((label) => `<th>${htmlCell(label)}</th>`).join("");
   const body = rows
     .map((row) => {
       const cells = row.map((value) => `<td>${htmlCell(value)}</td>`).join("");
@@ -173,21 +253,8 @@ export function buildTrackingExportExcelHtml(
     })
     .join("");
 
-  return `\uFEFF<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
-<head>
-<meta charset="utf-8" />
-<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
-<x:Name>Tracking</x:Name>
-<x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
-</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
-</head>
-<body>
-<table border="1" cellspacing="0" cellpadding="4">
-<thead><tr>${head}</tr></thead>
-<tbody>${body}</tbody>
-</table>
-</body>
-</html>`;
+  // Compact HTML so Excel does not turn source newlines into blank worksheet rows.
+  return `\uFEFF<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8" /><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Tracking</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body><table border="1" cellspacing="0" cellpadding="4"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></body></html>`;
 }
 
 export function trackingExportFilename(reason, { excel = true } = {}) {

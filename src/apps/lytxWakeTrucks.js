@@ -1,6 +1,8 @@
 /**
  * Lytx Video Search → Vehicles → Wake / Retry automation.
  */
+import { classifyCameraScanRow } from "../web/cameraMarks.js";
+import { parseDeviceNumber } from "../utils/lastCommunicated.js";
 
 const VEHICLE_LIST_URLS = [
   "https://app.lytx.com/#/lvs/vehicles",
@@ -456,7 +458,59 @@ export async function scanVehicleRows(page) {
   await primeVehicleTable(page);
 
   return page.evaluate(() => {
-    const vehicleRe = /\b([A-Z]{1,3}\d{3,5}[A-Z]{0,3})\b/;
+    const compact = (value) => String(value || "").replace(/\s+/g, "").toUpperCase();
+    const isDeviceId = (id) => /^(MV|QM)\d/i.test(id || "");
+    const compactVehicleRe = /\b([A-Z]{1,3}\d{3,5}[A-Z]{0,3})\b/;
+    const spacedVehicleRe = /\b([A-Z]{1,3}\s+\d{2,5}\s+[A-Z]{1,3})\b/;
+    const deviceRe = /\b((?:MV|QM)\d{4,})\b/i;
+    const dateRe =
+      /((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},\s+\d{4}(?:,\s*\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM))?)|(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}(?:,\s*\d{1,2}:\d{2}(?::\d{2})?)?)/i;
+    const blankDateRe = /^[\u2014\u2013—–\-]+$|^n\/?a$/i;
+
+    const cellText = (el) => (el?.innerText || el?.textContent || "").replace(/\s+/g, " ").trim();
+
+    const extractVehicleId = (cells, text) => {
+      const first = cells[0] || "";
+      if (first && !isDeviceId(compact(first))) {
+        const spaced = first.match(spacedVehicleRe);
+        if (spaced) return compact(spaced[1]);
+        const compactMatch = first.match(compactVehicleRe);
+        if (compactMatch && !isDeviceId(compactMatch[1])) return compactMatch[1].toUpperCase();
+      }
+      const spaced = text.match(spacedVehicleRe);
+      if (spaced && !isDeviceId(compact(spaced[1]))) return compact(spaced[1]);
+      for (const match of text.matchAll(new RegExp(compactVehicleRe.source, "g"))) {
+        if (!isDeviceId(match[1])) return match[1].toUpperCase();
+      }
+      return "";
+    };
+
+    const extractDevice = (cells, text) => {
+      for (const cell of cells) {
+        if (/^(MV|QM)\d{4,}$/i.test(cell)) return cell.toUpperCase();
+      }
+      const match = text.match(deviceRe);
+      return match ? match[1].toUpperCase() : "";
+    };
+
+    const extractLastCommunicated = (cellEls, cells, text) => {
+      const classHit = cellEls.find((el) => {
+        const cls = `${el.className || ""} ${el.getAttribute("data-column") || ""}`.toLowerCase();
+        return cls.includes("lastcommunicat") || cls.includes("last-communicat");
+      });
+      if (classHit) {
+        const value = cellText(classHit);
+        if (!value || blankDateRe.test(value)) return "";
+        return value;
+      }
+      for (const cell of cells) {
+        const dateMatch = cell.match(dateRe);
+        if (dateMatch) return dateMatch[0];
+      }
+      if (cells.length >= 3 && (!cells[2] || blankDateRe.test(cells[2]))) return "";
+      const fromText = text.match(dateRe);
+      return fromText ? fromText[0] : "";
+    };
 
     const classify = (text, actionLabels) => {
       for (const label of actionLabels) {
@@ -484,11 +538,15 @@ export async function scanVehicleRows(page) {
     for (const tr of candidates) {
       const text = (tr.innerText || tr.textContent || "").replace(/\s+/g, " ").trim();
       if (!text || text.length < 8) continue;
-      if (/^vehicle\b/i.test(text) && !vehicleRe.test(text)) continue;
+      if (/^vehicles?\b/i.test(text) && !compactVehicleRe.test(text) && !spacedVehicleRe.test(text)) {
+        continue;
+      }
 
-      const idMatch = text.match(vehicleRe);
-      if (!idMatch) continue;
-      const vehicleId = idMatch[1];
+      const cellEls = [...tr.querySelectorAll("td, [role='cell'], [role='gridcell']")];
+      const cells = cellEls.map(cellText);
+
+      const vehicleId = extractVehicleId(cells, text);
+      if (!vehicleId) continue;
       if (seen.has(vehicleId)) continue;
       seen.add(vehicleId);
 
@@ -497,7 +555,13 @@ export async function scanVehicleRows(page) {
         .filter(Boolean);
 
       const status = classify(text, actionLabels);
-      rows.push({ vehicleId, status, text });
+      rows.push({
+        vehicleId,
+        status,
+        text,
+        device: extractDevice(cells, text),
+        lastCommunicated: extractLastCommunicated(cellEls, cells, text),
+      });
     }
     return rows;
   });
@@ -606,7 +670,7 @@ export async function runWakePass(page, { clickDelayMs = 1000, passNumber = 1 } 
   let clicked = 0;
   let pages = 0;
   const clickedVehicles = [];
-  const notAvailableVehicles = new Set();
+  const notAvailableVehicles = new Map();
   const pageResults = [];
   const warnings = [];
   const { total } = await readPagination(page);
@@ -617,7 +681,10 @@ export async function runWakePass(page, { clickDelayMs = 1000, passNumber = 1 } 
     const rows = await scanVehicleRows(page);
     for (const row of rows) {
       if (row.status === "not_available") {
-        notAvailableVehicles.add(row.vehicleId);
+        notAvailableVehicles.set(
+          row.vehicleId,
+          row.device || notAvailableVehicles.get(row.vehicleId) || ""
+        );
       }
     }
     const targets = rows.filter(shouldClickWake);
@@ -680,7 +747,10 @@ export async function runWakePass(page, { clickDelayMs = 1000, passNumber = 1 } 
     maxPages,
     pageResults,
     clickedVehicles,
-    notAvailableVehicles: [...notAvailableVehicles],
+    notAvailableVehicles: [...notAvailableVehicles.entries()].map(([vehicleId, device]) => ({
+      vehicleId,
+      device,
+    })),
     warnings,
   };
 }
@@ -734,6 +804,110 @@ export async function collectNotBrowseTrucks(page) {
 
   console.log(`[wake] Final scan status counts: ${JSON.stringify(statusCounts)}`);
   return out.sort((a, b) => a.vehicleId.localeCompare(b.vehicleId));
+}
+
+/**
+ * Walk every Vehicles page and collect trucks whose Last communicated date
+ * is older than maxAgeDays (or missing). Does not click Wake/Retry.
+ */
+export async function scanStaleCameraPages(page, { maxAgeDays = 2, now = new Date() } = {}) {
+  await goToFirstPage(page);
+  await sleep(500);
+  const rowCount = await waitForVehicleDataLoaded(page, 90000);
+  if (rowCount < 20) {
+    throw new Error(
+      `Stale camera scan cannot run — only ${rowCount} vehicle rows visible (table not loaded)`
+    );
+  }
+
+  const stale = [];
+  const seen = new Set();
+  const pageResults = [];
+  const warnings = [];
+  const { total } = await readPagination(page);
+  const maxPages = Math.max(total, 1);
+  let scanned = 0;
+  let skippedRecent = 0;
+  let skippedUnparsed = 0;
+  let notAvailableCount = 0;
+  let staleDateCount = 0;
+
+  for (let pageNum = 1; pageNum <= maxPages; pageNum += 1) {
+    const rows = await scanVehicleRows(page);
+    let pageNotAvailable = 0;
+    let pageStaleDate = 0;
+    for (const row of rows) {
+      if (seen.has(row.vehicleId)) continue;
+      seen.add(row.vehicleId);
+      scanned += 1;
+      const verdict = classifyCameraScanRow(row, { maxAgeDays, now });
+      if (!verdict.include) {
+        if (verdict.dateReason === "unparsed") {
+          skippedUnparsed += 1;
+          console.log(
+            `[stale-cameras] Skip ${row.vehicleId} — could not parse last communicated (${row.lastCommunicated || "empty"})`
+          );
+        } else {
+          skippedRecent += 1;
+        }
+        continue;
+      }
+      if (verdict.mark === "not_available") {
+        pageNotAvailable += 1;
+        notAvailableCount += 1;
+      } else {
+        pageStaleDate += 1;
+        staleDateCount += 1;
+      }
+      stale.push({
+        vehicleId: row.vehicleId,
+        device: row.device || parseDeviceNumber(row.text) || "",
+        lastCommunicated: row.lastCommunicated || "",
+        mark: verdict.mark,
+        reason: verdict.mark,
+        dateReason: verdict.dateReason,
+        status: row.status,
+      });
+    }
+    console.log(
+      `[stale-cameras] Page ${pageNum}/${maxPages}: ${rows.length} rows, ${pageNotAvailable} not available, ${pageStaleDate} old dates`
+    );
+    pageResults.push({
+      pageNum,
+      maxPages,
+      rows: rows.length,
+      notAvailable: pageNotAvailable,
+      staleDate: pageStaleDate,
+      stale: pageNotAvailable + pageStaleDate,
+    });
+
+    if (pageNum >= maxPages) break;
+    const moved = await goToNextPage(page);
+    if (!moved) {
+      const msg = `Stopped at page ${pageNum}/${maxPages} — next-page control not found`;
+      console.log(`[stale-cameras] ${msg}`);
+      warnings.push(msg);
+      break;
+    }
+    await waitForVehicleRows(page, 1, 15000);
+  }
+
+  stale.sort((a, b) => {
+    if (a.mark !== b.mark) return a.mark === "not_available" ? -1 : 1;
+    return a.vehicleId.localeCompare(b.vehicleId);
+  });
+  return {
+    stale,
+    scanned,
+    skippedRecent,
+    skippedUnparsed,
+    notAvailableCount,
+    staleDateCount,
+    pages: pageResults.length,
+    maxPages,
+    pageResults,
+    warnings,
+  };
 }
 
 function summarizeStatus(text, status) {

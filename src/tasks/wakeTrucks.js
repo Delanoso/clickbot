@@ -47,10 +47,15 @@ export async function runWakeTrucks(config) {
         console.log(
           `[wake] Auto-adding ${notAvailable.length} Not available trucks into camera list`
         );
-        for (const truckNumber of notAvailable) {
+        for (const item of notAvailable) {
+          const truckNumber = typeof item === "string" ? item : item.vehicleId;
+          const device = typeof item === "string" ? "" : item.device || "";
           try {
-            // We don't know Lytx device numbers here; leave it blank for the user to fill in.
-            addCameraTruck(truckNumber, { device: "", skipLookup: true, restart: false });
+            addCameraTruck(truckNumber, {
+              device,
+              mark: "not_available",
+              comment: "Not available, No Recent Activity",
+            });
           } catch (e) {
             console.log(`[wake] Could not add ${truckNumber} to camera list: ${e?.message || e}`);
           }

@@ -29,7 +29,7 @@ stopBtn.addEventListener("click", () => controlTask("stop"));
 
 exportBtn?.addEventListener("click", (event) => {
   event.preventDefault();
-  void downloadExportFile(`/api/depot/export?t=${Date.now()}`, "driver-ppe.csv").catch(
+  void downloadExportFile(`/api/depot/export?t=${Date.now()}`, "driver-ppe.xls").catch(
     (error) => {
       truckFormNote.textContent = error.message || "Export failed";
     }

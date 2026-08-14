@@ -32,8 +32,8 @@ export function trackingSubnavHtml(active) {
 }
 
 /** Fetch export and save as a file — works on iPad Safari (avoids in-browser preview). */
-export async function downloadExportFile(url, fallbackName = "tracking-export.csv") {
-  const res = await fetch(url, { headers: { Accept: "text/csv" } });
+export async function downloadExportFile(url, fallbackName = "tracking-export.xls") {
+  const res = await fetch(url);
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error || `Export failed (${res.status})`);
@@ -53,6 +53,19 @@ export async function downloadExportFile(url, fallbackName = "tracking-export.cs
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+}
+
+export function cameraMarkLabel(mark) {
+  if (mark === "not_available") return "Not available";
+  if (mark === "stale") return "Old last communicated";
+  return "";
+}
+
+export function cameraMarkBadgeHtml(mark) {
+  const label = cameraMarkLabel(mark);
+  if (!label) return "";
+  const tone = mark === "not_available" ? "unavailable" : "stale";
+  return `<span class="reason-badge mark-${tone}">${escapeHtml(label)}</span>`;
 }
 
 export function reasonBadgeHtml(reason) {

@@ -129,6 +129,7 @@ function serveStatic(req, res, urlPath) {
     relative = "/tracking-camera.html";
   }
   if (relative === "/wake-trucks" || relative === "/wake-trucks/") relative = "/wake-trucks.html";
+  if (relative === "/stale-cameras" || relative === "/stale-cameras/") relative = "/stale-cameras.html";
   if (relative === "/notes" || relative === "/notes/") relative = "/notes.html";
   if (
     relative === "/incidents-drivers" ||
@@ -458,16 +459,16 @@ function buildIncidentsExportCsv() {
 
 function sendTrackingExport(res, reason) {
   try {
-    const csv = buildTrackingExportCsv(reason, CONFIG_PATH);
-    const filename = trackingExportFilename(reason, { excel: false });
+    const body = buildTrackingExportExcelHtml(reason, CONFIG_PATH);
+    const filename = trackingExportFilename(reason, { excel: true });
     res.writeHead(200, {
-      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Type": "application/vnd.ms-excel; charset=utf-8",
       "Content-Disposition": `attachment; filename="${filename}"`,
       "Cache-Control": "no-store, no-cache, must-revalidate",
       "X-Content-Type-Options": "nosniff",
       Pragma: "no-cache",
     });
-    res.end(csv);
+    res.end(body);
   } catch (error) {
     sendJson(res, 400, { error: error.message || String(error) });
   }
@@ -598,6 +599,16 @@ async function handleApi(req, res, url) {
       task: getTask("wake-trucks"),
       stage2: getWakeStage2(),
       stage1Trucks: stage1WokenTrucks(),
+    });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/stale-cameras") {
+    const task = getTask("stale-cameras");
+    const status = task?.status || {};
+    return sendJson(res, 200, {
+      task,
+      maxAgeDays: status.summary?.maxAgeDays ?? 2,
+      staleTrucks: status.summary?.staleTrucks || status.staleTrucks || [],
     });
   }
 
@@ -863,6 +874,8 @@ async function handleApi(req, res, url) {
           reasonLabel: reasonLabel(reason),
           driver: cfg.driver || row.driver || "",
           comment: cfg.comment || row.comment || "",
+          device: cfg.device || row.device || "",
+          mark: cfg.mark || row.mark || "",
           inDepot:
             row.inDepot != null ? Boolean(row.inDepot) : Boolean(row.inTargetArea),
           inJohannesburg: Boolean(row.inJohannesburg),

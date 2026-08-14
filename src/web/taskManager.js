@@ -50,6 +50,12 @@ export const TASKS = [
     summary: "Lytx Video Search — one pass Wake/Retry all pages, run summary in logs.",
     cli: "wake-trucks",
   },
+  {
+    id: "stale-cameras",
+    name: "Stale Cameras",
+    summary: "Scan Last communicated; add trucks older than 2 days to Truck Camera with device number.",
+    cli: "stale-cameras",
+  },
 ];
 
 const processes = new Map();

@@ -525,6 +525,7 @@ main {
 
 .top-nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.75rem;
   margin-bottom: 1.75rem;
 }
@@ -782,18 +783,28 @@ a.btn.is-disabled {
 }
 
 .reason-badge.reason-incident {
-  color: #f0b35a;
-  border-color: rgba(240, 179, 90, 0.55);
+  color: #4d9fff;
+  border-color: rgba(77, 159, 255, 0.7);
 }
 
 .reason-badge.reason-camera {
-  color: #7eb6ff;
-  border-color: rgba(126, 182, 255, 0.55);
+  color: #7ee05a;
+  border-color: rgba(126, 224, 90, 0.55);
+}
+
+.reason-badge.mark-unavailable {
+  color: #f0a36a;
+  border-color: rgba(240, 163, 106, 0.65);
+}
+
+.reason-badge.mark-stale {
+  color: #c9b4ff;
+  border-color: rgba(201, 180, 255, 0.6);
 }
 
 .reason-eyebrow.reason-ppe { color: #5fe0a4; }
-.reason-eyebrow.reason-incident { color: #f0b35a; }
-.reason-eyebrow.reason-camera { color: #7eb6ff; }
+.reason-eyebrow.reason-incident { color: #4d9fff; }
+.reason-eyebrow.reason-camera { color: #7ee05a; }
 
 .inline-link {
   display: inline-block;
