@@ -27,7 +27,8 @@
       <p class="lede">
         Scan Vehicles. <strong>Not available, No Recent Activity</strong> is marked separately from
         trucks that still work but last communicated on or before 2 days ago (if today is the 13th,
-        the 11th and earlier, any time). Both go onto Truck Camera with the device number.
+        the 11th and earlier, any time). Truck Camera is synced each run: hits are added or updated,
+        and trucks that no longer qualify are removed. Custom comments stay when a truck remains listed.
       </p>
       <div class="hero-meta">
         <span id="hostLine">Starting…</span>
@@ -56,8 +57,9 @@
           <div>
             <h2>Last communicated scan</h2>
             <p>
-              One pass through Lytx Vehicles. No Wake or Retry clicks. Not available trucks and
-              old-date trucks are added to Truck Camera with different marks.
+              One pass through Lytx Vehicles. No Wake or Retry clicks. Truck Camera is kept in sync
+              with the scan — new hits are added, trucks that recover are removed, and your comments
+              stay when a truck remains listed.
             </p>
           </div>
           <div class="count-block">
@@ -71,6 +73,7 @@
           <div><dt>Not available</dt><dd id="unavailableDetail">—</dd></div>
           <div><dt>Old dates</dt><dd id="oldDateDetail">—</dd></div>
           <div><dt>Added</dt><dd id="addedDetail">—</dd></div>
+          <div><dt>Removed</dt><dd id="removedDetail">—</dd></div>
         </dl>
 
         <div class="section-subhead">

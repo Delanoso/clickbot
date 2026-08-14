@@ -12,6 +12,7 @@ const pagesDetail = document.getElementById("pagesDetail");
 const unavailableDetail = document.getElementById("unavailableDetail");
 const oldDateDetail = document.getElementById("oldDateDetail");
 const addedDetail = document.getElementById("addedDetail");
+const removedDetail = document.getElementById("removedDetail");
 const truckList = document.getElementById("truckList");
 const copyBtn = document.getElementById("copyBtn");
 const copyNote = document.getElementById("copyNote");
@@ -92,6 +93,7 @@ function renderStale(task) {
   const csv = summary.copyPasteCsv || "";
   const total = summary.staleCount ?? status.staleCount ?? trucks.length ?? 0;
   const added = summary.addedCount ?? status.added ?? 0;
+  const removed = summary.removedCount ?? status.removed ?? 0;
   const unavailableCount =
     summary.notAvailableCount ?? status.notAvailableCount ?? unavailable.length;
   const oldDateCount = summary.staleDateCount ?? status.staleDateCount ?? oldDates.length;
@@ -103,6 +105,7 @@ function renderStale(task) {
   unavailableDetail.textContent = task?.running ? "…" : String(unavailableCount);
   oldDateDetail.textContent = task?.running ? "…" : String(oldDateCount);
   addedDetail.textContent = task?.running ? "…" : String(added);
+  removedDetail.textContent = task?.running ? "…" : String(removed);
 
   lastCsv = csv;
   if (csv) {

@@ -17,7 +17,7 @@
     "explore": "node src/explore.js",
     "demo:server": "node demo/server.js",
     "demo": "node scripts/run-demo.mjs",
-    "test": "node src/utils/driverName.test.js && node src/utils/depotMonitor.test.js && node src/utils/locationClassifier.test.js && node src/utils/lastCommunicated.test.js && node src/web/cameraMarks.test.js && node src/web/trackingExport.test.js",
+    "test": "node src/utils/driverName.test.js && node src/utils/depotMonitor.test.js && node src/utils/locationClassifier.test.js && node src/utils/lastCommunicated.test.js && node src/web/cameraMarks.test.js && node src/web/cameraConfig.test.js && node src/web/trackingExport.test.js",
     "verify:names": "node scripts/verifyDriverNames.js",
     "install-browsers": "playwright install chromium"
   },

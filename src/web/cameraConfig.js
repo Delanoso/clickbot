@@ -149,9 +149,10 @@ function saveTruckEntries(current, trucks) {
   current.trucks = trucks;
 }
 
-export function addCameraTruck(
+function upsertCameraTruckInMemory(
+  trucks,
   truckNumber,
-  { driver = "", comment = "", device = "", mark = "", configPath = DEFAULT_CONFIG } = {}
+  { driver = "", comment = "", device = "", mark = "" } = {}
 ) {
   const truck = normalizeTruckId(truckNumber);
   if (!truck) throw new Error("Truck number is required");
@@ -159,70 +160,161 @@ export function addCameraTruck(
   const commentText = String(comment || "").trim();
   const deviceNumber = String(device || "").trim();
   const incomingMark = normalizeCameraMark(mark);
+  const existing = trucks.find((entry) => entry.id === truck);
 
-  return withConfigLock(configPath, () => {
-    const current = readCameraConfig(configPath);
-    const existing = current.trucks.find((entry) => entry.id === truck);
-    if (existing) {
-      let updated = false;
-      if (driverName && existing.driver !== driverName) {
-        existing.driver = driverName;
-        updated = true;
-      }
-      if (deviceNumber && existing.device !== deviceNumber) {
-        existing.device = deviceNumber;
-        updated = true;
-      }
-      if (incomingMark) {
-        const nextMark = preferCameraMark(existing.mark, incomingMark);
-        if (nextMark !== (existing.mark || "")) {
-          existing.mark = nextMark;
-          updated = true;
-        }
-      }
-      if (
-        commentText &&
-        existing.comment !== commentText &&
-        (!existing.comment || isAutoCameraComment(existing.comment))
-      ) {
-        existing.comment = commentText;
-        updated = true;
-      }
-      if (updated) saveTruckEntries(current, current.trucks);
-      return {
-        trucks: current.trucks,
-        added: false,
-        updated,
-        truck,
-        driver: existing.driver || "",
-        comment: existing.comment || "",
-        device: existing.device || "",
-        mark: existing.mark || "",
-      };
+  if (existing) {
+    let updated = false;
+    if (driverName && existing.driver !== driverName) {
+      existing.driver = driverName;
+      updated = true;
     }
-
-    const resolvedMark = incomingMark;
-    const resolvedComment = commentText || cameraMarkComment(resolvedMark);
-    const trucks = [
-      ...current.trucks,
-      {
-        id: truck,
-        driver: driverName,
-        comment: resolvedComment,
-        device: deviceNumber,
-        mark: resolvedMark,
-      },
-    ];
-    saveTruckEntries(current, trucks);
+    if (deviceNumber && existing.device !== deviceNumber) {
+      existing.device = deviceNumber;
+      updated = true;
+    }
+    if (incomingMark) {
+      const nextMark = preferCameraMark(existing.mark, incomingMark);
+      if (nextMark !== (existing.mark || "")) {
+        existing.mark = nextMark;
+        updated = true;
+      }
+    }
+    if (
+      commentText &&
+      existing.comment !== commentText &&
+      (!existing.comment || isAutoCameraComment(existing.comment))
+    ) {
+      existing.comment = commentText;
+      updated = true;
+    }
     return {
       trucks,
-      added: true,
-      updated: false,
+      added: false,
+      updated,
       truck,
-      driver: driverName,
-      comment: resolvedComment,
-      device: deviceNumber,
-      mark: resolvedMark,
+      entry: existing,
+      driver: existing.driver || "",
+      comment: existing.comment || "",
+      device: existing.device || "",
+      mark: existing.mark || "",
+    };
+  }
+
+  const resolvedMark = incomingMark;
+  const resolvedComment = commentText || cameraMarkComment(resolvedMark);
+  const entry = {
+    id: truck,
+    driver: driverName,
+    comment: resolvedComment,
+    device: deviceNumber,
+    mark: resolvedMark,
+  };
+  return {
+    trucks: [...trucks, entry],
+    added: true,
+    updated: false,
+    truck,
+    entry,
+    driver: driverName,
+    comment: resolvedComment,
+    device: deviceNumber,
+    mark: resolvedMark,
+  };
+}
+
+export function addCameraTruck(
+  truckNumber,
+  { driver = "", comment = "", device = "", mark = "", configPath = DEFAULT_CONFIG } = {}
+) {
+  return withConfigLock(configPath, () => {
+    const current = readCameraConfig(configPath);
+    const result = upsertCameraTruckInMemory(current.trucks, truckNumber, {
+      driver,
+      comment,
+      device,
+      mark,
+    });
+    if (result.added || result.updated) {
+      saveTruckEntries(current, result.trucks);
+    }
+    return {
+      trucks: result.trucks,
+      added: result.added,
+      updated: result.updated,
+      truck: result.truck,
+      driver: result.driver,
+      comment: result.comment,
+      device: result.device,
+      mark: result.mark,
+    };
+  });
+}
+
+/**
+ * Mirror Truck Camera to a stale-cameras scan: add/update hits, remove trucks
+ * no longer on the scan. Custom comments are kept for trucks that stay listed.
+ */
+export function syncCameraTrucksFromStaleScan(
+  scanRows,
+  { configPath = DEFAULT_CONFIG } = {}
+) {
+  return withConfigLock(configPath, () => {
+    const current = readCameraConfig(configPath);
+    let trucks = [...current.trucks];
+    const foundIds = new Set();
+    let addedCount = 0;
+    let updatedCount = 0;
+    let alreadyListed = 0;
+    const applied = [];
+
+    for (const row of scanRows || []) {
+      const truck = normalizeTruckId(row.vehicleId);
+      if (!truck) continue;
+      foundIds.add(truck);
+
+      const mark = normalizeCameraMark(row.mark || "");
+      const commentText = String(
+        row.comment != null ? row.comment : cameraMarkComment(mark, row.lastCommunicated || "")
+      ).trim();
+      const result = upsertCameraTruckInMemory(trucks, truck, {
+        device: row.device || "",
+        mark,
+        comment: commentText,
+      });
+      trucks = result.trucks;
+      if (result.added) addedCount += 1;
+      else if (result.updated) updatedCount += 1;
+      else alreadyListed += 1;
+      applied.push({
+        vehicleId: truck,
+        device: result.device || "",
+        lastCommunicated: row.lastCommunicated || "",
+        mark: result.mark || mark,
+        markLabel: "",
+        reason: result.mark || mark,
+        added: result.added,
+        updated: result.updated,
+      });
+    }
+
+    const removedTrucks = trucks.filter((entry) => !foundIds.has(entry.id)).map((entry) => entry.id);
+    const kept = trucks.filter((entry) => foundIds.has(entry.id));
+    const removedCount = removedTrucks.length;
+    const changed = addedCount > 0 || updatedCount > 0 || removedCount > 0;
+
+    if (changed) {
+      saveTruckEntries(current, kept);
+    }
+
+    return {
+      trucks: kept,
+      addedCount,
+      updatedCount,
+      alreadyListed,
+      removedCount,
+      removedTrucks,
+      applied,
+      changed,
     };
   });
 }
