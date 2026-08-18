@@ -141,7 +141,7 @@ export async function filterLytxByVehicle(page, selectors, truckNumber) {
   if (!/^Vehicle$/i.test(current)) {
     // Pendo overlays intercept pointer events and block this click — remove them first.
     await dismissPendo(page);
-    await searchDropdown.click();
+    await searchDropdown.click({ force: true });
     await sleep(600);
     const vehicleOption = page
       .locator(
@@ -150,7 +150,7 @@ export async function filterLytxByVehicle(page, selectors, truckNumber) {
       .filter({ hasText: /Vehicle/i })
       .first();
     await vehicleOption.waitFor({ state: "visible", timeout: 10000 });
-    await vehicleOption.click();
+    await vehicleOption.click({ force: true });
     await sleep(500);
   }
 
@@ -178,7 +178,7 @@ export async function filterLytxByVehicle(page, selectors, truckNumber) {
 
   try {
     await suggestion.waitFor({ state: "visible", timeout: 4000 });
-    await suggestion.click();
+    await suggestion.click({ force: true });
   } catch {
     // Prefer exact truck label; otherwise take the first suggestion for the id.
     const fallbackSuggestion = page
@@ -192,7 +192,7 @@ export async function filterLytxByVehicle(page, selectors, truckNumber) {
       .first();
     try {
       await fallbackSuggestion.waitFor({ state: "visible", timeout: 2000 });
-      await fallbackSuggestion.click();
+      await fallbackSuggestion.click({ force: true });
     } catch {
       await input.press("Enter");
     }
