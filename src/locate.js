@@ -64,6 +64,7 @@ export async function clickFrom(page, selector, { timeout = 10000 } = {}) {
   await locator.waitFor({ state: "visible", timeout });
   try {
     await locator.click({ timeout });
+    return;
   } catch (error) {
     // If another overlay sits on top of the target and intercepts pointer
     // events (common with Pendo guided walkthrough backdrops), Playwright
@@ -73,8 +74,20 @@ export async function clickFrom(page, selector, { timeout = 10000 } = {}) {
     const shouldForce =
       /intercept(s)? pointer events|subtree intercepts pointer events|not stable/i.test(msg);
     if (shouldForce) {
-      await locator.click({ timeout, force: true });
-      return;
+      try {
+        await locator.click({ timeout, force: true });
+        return;
+      } catch {
+        // Last resort: bypass hit-testing by triggering the click in the page
+        // context. This is more reliable when overlays prevent Playwright
+        // from dispatching pointer events.
+        try {
+          await locator.evaluate((el) => el.click());
+          return;
+        } catch (e2) {
+          throw error;
+        }
+      }
     }
     throw error;
   }
