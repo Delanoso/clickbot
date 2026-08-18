@@ -32,25 +32,66 @@ async function blockPendo(context) {
       teardown: noop,
     };
 
-    // Extra belt-and-suspenders:
-    // Even if Pendo's bundle decides to mount anyway (e.g. it doesn't check
-    // window.pendo existence), force any known Pendo overlay/backdrop nodes to
-    // not intercept pointer events.
-    const style = document.createElement("style");
-    style.textContent = `
-      #pendo-base,
-      ._pendo-step-container,
-      ._pendo-guide-tt_,
-      .pendo-mock-flexbox-element,
-      .pendo-backdrop-region-left,
-      .pendo-backdrop-region-right,
-      [class*="pendo-backdrop"],
-      [id*="pendo-backdrop"] {
-        pointer-events: none !important;
-        display: none !important;
+    const PENDO_NODE_SELECTORS = [
+      "#pendo-base",
+      "._pendo-step-container",
+      "._pendo-guide-tt_",
+      ".pendo-mock-flexbox-element",
+      ".pendo-backdrop-region-left",
+      ".pendo-backdrop-region-right",
+      "[class*='pendo-backdrop']",
+      "[id*='pendo-backdrop']",
+    ];
+
+    const disablePendoNodes = () => {
+      for (const sel of PENDO_NODE_SELECTORS) {
+        document.querySelectorAll(sel).forEach((el) => {
+          // Ensure the overlay/backdrop cannot intercept clicks.
+          el.style.setProperty("pointer-events", "none", "important");
+          el.style.setProperty("display", "none", "important");
+          el.style.setProperty("visibility", "hidden", "important");
+        });
       }
-    `;
-    document.head.appendChild(style);
+    };
+
+    disablePendoNodes();
+
+    // CSS belt-and-suspenders (in case style attributes get overwritten).
+    // Some pages may not have document.head ready at init time.
+    try {
+      const style = document.createElement("style");
+      style.textContent = `
+        ${PENDO_NODE_SELECTORS.join(",")} {
+          pointer-events: none !important;
+          display: none !important;
+          visibility: hidden !important;
+        }
+      `;
+      const parent = document.head || document.documentElement;
+      parent.appendChild(style);
+    } catch {
+      // Best-effort only.
+    }
+
+    // Keep neutralizing if Pendo mounts later (or via async bundles).
+    // Debounce to avoid excessive work.
+    let scheduled = false;
+    const schedule = () => {
+      if (scheduled) return;
+      scheduled = true;
+      setTimeout(() => {
+        scheduled = false;
+        disablePendoNodes();
+      }, 50);
+    };
+
+    try {
+      const mo = new MutationObserver(() => schedule());
+      mo.observe(document.documentElement, { childList: true, subtree: true });
+    } catch {
+      // If MutationObserver isn't available, the polling-less fallback is still
+      // the initial disable + CSS.
+    }
   });
 }
 
