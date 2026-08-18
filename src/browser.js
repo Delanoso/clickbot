@@ -31,6 +31,26 @@ async function blockPendo(context) {
       flushNow: noop,
       teardown: noop,
     };
+
+    // Extra belt-and-suspenders:
+    // Even if Pendo's bundle decides to mount anyway (e.g. it doesn't check
+    // window.pendo existence), force any known Pendo overlay/backdrop nodes to
+    // not intercept pointer events.
+    const style = document.createElement("style");
+    style.textContent = `
+      #pendo-base,
+      ._pendo-step-container,
+      ._pendo-guide-tt_,
+      .pendo-mock-flexbox-element,
+      .pendo-backdrop-region-left,
+      .pendo-backdrop-region-right,
+      [class*="pendo-backdrop"],
+      [id*="pendo-backdrop"] {
+        pointer-events: none !important;
+        display: none !important;
+      }
+    `;
+    document.head.appendChild(style);
   });
 }
 
