@@ -2,9 +2,14 @@ const hostLine = document.getElementById("hostLine");
 const clockLine = document.getElementById("clockLine");
 const logTabs = document.getElementById("logTabs");
 const logView = document.getElementById("logView");
-const depotDot = document.getElementById("depotDot");
-const depotState = document.getElementById("depotState");
-const depotDetail = document.getElementById("depotDetail");
+const trackDot = document.getElementById("trackDot");
+const trackState = document.getElementById("trackState");
+const trackDetail = document.getElementById("trackDetail");
+const notesHomeDot = document.getElementById("notesHomeDot");
+const notesHomeDetail = document.getElementById("notesHomeDetail");
+const wakeDot = document.getElementById("wakeDot");
+const wakeState = document.getElementById("wakeState");
+const wakeDetail = document.getElementById("wakeDetail");
 
 let selectedLogTask = "allocate-drivers";
 
@@ -38,17 +43,40 @@ async function controlTask(taskId, action) {
 }
 
 function renderTasks(tasks) {
+  const trackingIds = ["depot-monitor", "incidents-monitor", "camera-monitor"];
+  const trackingTasks = tasks.filter((task) => trackingIds.includes(task.id));
+  if (trackState && trackingTasks.length) {
+    const anyRunning = trackingTasks.some((task) => task.running);
+    const state = anyRunning
+      ? "running"
+      : trackingTasks.some((task) => task.status?.state === "error")
+        ? "error"
+        : "idle";
+    trackState.textContent = state;
+    trackDot.className = `status-dot ${state}`;
+    const watched = trackingTasks.reduce(
+      (sum, task) => sum + (Number(task.status?.watchedCount) || 0),
+      0
+    );
+    trackDetail.textContent = watched
+      ? `${watched} watched`
+      : trackingTasks.map((task) => task.name).join(" · ");
+  }
+
   for (const task of tasks) {
-    if (task.id === "depot-monitor") {
+    if (trackingIds.includes(task.id)) continue;
+
+    if (task.id === "wake-trucks") {
       const state = task.running
         ? "running"
         : task.status?.state || (task.exitCode != null ? "stopped" : "idle");
-      depotState.textContent = state;
-      depotDot.className = `status-dot ${state}`;
-      depotDetail.textContent =
-        task.status?.inDepotCount != null
-          ? `${task.status.inDepotCount} / ${task.status.watchedCount || "?"}`
-          : task.status?.message || "—";
+      wakeState.textContent = state;
+      wakeDot.className = `status-dot ${state}`;
+      wakeDetail.textContent =
+        task.status?.summary?.dashboardMessage ||
+        (task.status?.clicked != null
+          ? `${task.status.clicked} woken`
+          : task.status?.message || "—");
       continue;
     }
 
@@ -70,20 +98,13 @@ function renderTasks(tasks) {
         task.status?.remaining != null
           ? String(task.status.remaining)
           : task.status?.message || "—";
-    } else if (task.id === "wake-trucks") {
-      const count = task.status?.stillNotBrowseCount;
-      detail =
-        count != null
-          ? count === 0
-            ? "All Browse"
-            : `${count} not Browse`
-          : task.status?.message || "—";
     }
     panel.querySelector('[data-role="detail"]').textContent = detail;
   }
 
   const homeTasks = tasks.filter(
-    (task) => task.id !== "depot-monitor" && task.id !== "incidents-monitor"
+    (task) =>
+      !trackingIds.includes(task.id) && task.id !== "wake-trucks"
   );
   logTabs.innerHTML = "";
   for (const task of homeTasks) {
@@ -111,18 +132,27 @@ async function refreshLogs() {
 }
 
 async function refresh() {
-  const [healthRes, tasksRes] = await Promise.all([
+  const [healthRes, tasksRes, notesRes] = await Promise.all([
     fetch("/api/health"),
     fetch("/api/tasks"),
+    fetch("/api/notes"),
   ]);
   const health = await healthRes.json();
   const tasksPayload = await tasksRes.json();
+  const notesPayload = await notesRes.json().catch(() => ({}));
 
   const ip = (health.addresses && health.addresses[0]) || location.hostname;
   hostLine.textContent = `http://${ip}${location.port ? `:${location.port}` : ""}`;
   clockLine.textContent = new Date().toLocaleString();
 
   renderTasks(tasksPayload.tasks || []);
+  if (notesHomeDetail) {
+    const total = notesPayload.counts?.all ?? notesPayload.notes?.length ?? 0;
+    notesHomeDetail.textContent = `${total} note${total === 1 ? "" : "s"}`;
+    if (notesHomeDot) {
+      notesHomeDot.className = `status-dot ${total ? "running" : "idle"}`;
+    }
+  }
   await refreshLogs();
 }
 

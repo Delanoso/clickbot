@@ -23,8 +23,19 @@ import {
 } from "./incidentsConfig.js";
 import { fetchVehicleDriverName } from "./fetchVehicleDriver.js";
 import {
+  buildWakeStage2ExportCsv,
+  getWakeStage2,
+  isWakeStage2Cancelled,
+  markWakeStage2Looking,
+  setWakeStage2Driver,
+  setWakeStage2Error,
+  startWakeStage2,
+  stopWakeStage2,
+} from "./wakeStage2.js";
+import {
   getDepotSnapshot,
   getIncidentsSnapshot,
+  getCameraSnapshot,
   getTask,
   listTasks,
   readTaskLog,
@@ -32,6 +43,33 @@ import {
   stopTask,
 } from "./taskManager.js";
 import { getJohannesburgCoverageSummary } from "../utils/locationClassifier.js";
+import {
+  addCameraTruck,
+  listCameraTrucks,
+  readCameraConfig,
+  removeCameraTruck,
+  setCameraTruckComment,
+  setCameraTruckDevice,
+  setCameraTruckDriver,
+  setCameraTrucks,
+} from "./cameraConfig.js";
+import {
+  createNote,
+  deleteNote,
+  listNotes,
+  NOTE_CATEGORIES,
+  updateNote,
+} from "./notesStore.js";
+import {
+  normalizeReason,
+  reasonLabel,
+  TRACKING_REASON_META,
+} from "./trackingReasons.js";
+import {
+  buildTrackingExportCsv,
+  buildTrackingExportExcelHtml,
+  trackingExportFilename,
+} from "./trackingExport.js";
 
 loadEnvFile();
 
@@ -79,14 +117,26 @@ function readBody(req) {
 
 function serveStatic(req, res, urlPath) {
   let relative = urlPath === "/" ? "/index.html" : urlPath;
-  if (relative === "/depot" || relative === "/depot/") relative = "/depot.html";
+  if (relative === "/depot" || relative === "/depot/") relative = "/tracking-ppe.html";
+  if (relative === "/tracking" || relative === "/tracking/") relative = "/tracking-overview.html";
+  if (relative === "/tracking/ppe" || relative === "/tracking/ppe/") {
+    relative = "/tracking-ppe.html";
+  }
+  if (relative === "/tracking/incident" || relative === "/tracking/incident/") {
+    relative = "/tracking-incident.html";
+  }
+  if (relative === "/tracking/camera" || relative === "/tracking/camera/") {
+    relative = "/tracking-camera.html";
+  }
+  if (relative === "/wake-trucks" || relative === "/wake-trucks/") relative = "/wake-trucks.html";
+  if (relative === "/notes" || relative === "/notes/") relative = "/notes.html";
   if (
     relative === "/incidents-drivers" ||
     relative === "/incidents-drivers/" ||
     relative === "/incidents" ||
     relative === "/incidents/"
   ) {
-    relative = "/incidents-drivers.html";
+    relative = "/tracking-incident.html";
   }
   relative = relative.split("?")[0];
   const filePath = join(publicDir, relative);
@@ -136,6 +186,18 @@ function restartIncidentsIfRunning() {
   return { restarted: true, task: getTask("incidents-monitor") };
 }
 
+function restartCameraIfRunning() {
+  const task = getTask("camera-monitor");
+  if (!task?.running) {
+    return { restarted: false, task };
+  }
+  stopTask("camera-monitor");
+  setTimeout(() => {
+    startTask("camera-monitor", { configPath: CONFIG_PATH });
+  }, 1200);
+  return { restarted: true, task: getTask("camera-monitor") };
+}
+
 const driverLookupQueue = [];
 /** Trucks cancelled while a lookup was queued or in flight (e.g. user removed them). */
 const cancelledDriverLookups = new Set();
@@ -145,6 +207,10 @@ let driverLookupRunning = false;
 const incidentsDriverLookupQueue = [];
 const cancelledIncidentsDriverLookups = new Set();
 let incidentsDriverLookupRunning = false;
+
+const cameraDriverLookupQueue = [];
+const cancelledCameraDriverLookups = new Set();
+let cameraDriverLookupRunning = false;
 
 function queueDriverLookup(truckNumber) {
   const truck = String(truckNumber || "").trim().toUpperCase();
@@ -178,6 +244,24 @@ function cancelIncidentsDriverLookup(truckNumber) {
   cancelledIncidentsDriverLookups.add(truck);
   const idx = incidentsDriverLookupQueue.indexOf(truck);
   if (idx >= 0) incidentsDriverLookupQueue.splice(idx, 1);
+}
+
+function queueCameraDriverLookup(truckNumber) {
+  const truck = String(truckNumber || "").trim().toUpperCase();
+  if (!truck) return;
+  cancelledCameraDriverLookups.delete(truck);
+  if (!cameraDriverLookupQueue.includes(truck)) {
+    cameraDriverLookupQueue.push(truck);
+  }
+  void processCameraDriverLookupQueue();
+}
+
+function cancelCameraDriverLookup(truckNumber) {
+  const truck = String(truckNumber || "").trim().toUpperCase();
+  if (!truck) return;
+  cancelledCameraDriverLookups.add(truck);
+  const idx = cameraDriverLookupQueue.indexOf(truck);
+  if (idx >= 0) cameraDriverLookupQueue.splice(idx, 1);
 }
 
 async function processDriverLookupQueue() {
@@ -261,60 +345,163 @@ async function processIncidentsDriverLookupQueue() {
   }
 }
 
+async function processCameraDriverLookupQueue() {
+  if (cameraDriverLookupRunning) return;
+  cameraDriverLookupRunning = true;
+  try {
+    while (cameraDriverLookupQueue.length) {
+      const truck = cameraDriverLookupQueue.shift();
+      if (cancelledCameraDriverLookups.has(truck)) {
+        cancelledCameraDriverLookups.delete(truck);
+        continue;
+      }
+      try {
+        console.log(`[camera] Looking up driver for ${truck}...`);
+        const driver = await fetchVehicleDriverName(truck, CONFIG_PATH);
+        if (cancelledCameraDriverLookups.has(truck)) {
+          cancelledCameraDriverLookups.delete(truck);
+          console.log(`[camera] ${truck} lookup discarded (truck removed)`);
+          continue;
+        }
+        if (driver) {
+          const result = setCameraTruckDriver(truck, driver, CONFIG_PATH);
+          if (result.missing) {
+            console.log(`[camera] ${truck} -> ${driver} (skipped, not on list)`);
+          } else {
+            console.log(`[camera] ${truck} -> ${driver}`);
+          }
+        } else {
+          console.log(`[camera] ${truck} -> (no driver)`);
+        }
+      } catch (error) {
+        console.log(
+          `[camera] Driver lookup failed for ${truck}: ${error.message || error}`
+        );
+      }
+    }
+  } finally {
+    cameraDriverLookupRunning = false;
+    if (cameraDriverLookupQueue.length) void processCameraDriverLookupQueue();
+  }
+}
+
+const wakeStage2LookupQueue = [];
+let wakeStage2LookupRunning = false;
+
+function queueWakeStage2Lookups(trucks) {
+  wakeStage2LookupQueue.length = 0;
+  for (const truck of trucks) {
+    const id = String(truck || "").trim().toUpperCase();
+    if (id) wakeStage2LookupQueue.push(id);
+  }
+  void processWakeStage2LookupQueue();
+}
+
+async function processWakeStage2LookupQueue() {
+  if (wakeStage2LookupRunning) return;
+  wakeStage2LookupRunning = true;
+  try {
+    while (wakeStage2LookupQueue.length) {
+      if (isWakeStage2Cancelled()) {
+        wakeStage2LookupQueue.length = 0;
+        break;
+      }
+      const truck = wakeStage2LookupQueue.shift();
+      markWakeStage2Looking(truck);
+      try {
+        console.log(`[wake-stage2] Looking up driver for ${truck}...`);
+        const driver = await fetchVehicleDriverName(truck, CONFIG_PATH);
+        if (isWakeStage2Cancelled()) break;
+        setWakeStage2Driver(truck, driver);
+        console.log(`[wake-stage2] ${truck} -> ${driver || "(no driver)"}`);
+      } catch (error) {
+        if (isWakeStage2Cancelled()) break;
+        setWakeStage2Error(truck, error);
+        console.log(
+          `[wake-stage2] Driver lookup failed for ${truck}: ${error.message || error}`
+        );
+      }
+    }
+  } finally {
+    wakeStage2LookupRunning = false;
+    if (wakeStage2LookupQueue.length && !isWakeStage2Cancelled()) {
+      void processWakeStage2LookupQueue();
+    }
+  }
+}
+
+function stage1WokenTrucks() {
+  const task = getTask("wake-trucks");
+  const status = task?.status || {};
+  const fromSummary = status.summary?.clickedVehicles;
+  const fromStatus = status.clickedVehicles;
+  return [...(fromSummary || fromStatus || [])]
+    .map((t) => String(t || "").trim().toUpperCase())
+    .filter(Boolean);
+}
+
 function csvEscape(value) {
-  const text = String(value ?? "");
-  if (/[",\r\n]/.test(text)) {
+  const text = String(value ?? "")
+    .replace(/\r\n/g, " ")
+    .replace(/[\r\n\u2028\u2029]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (/[",]/.test(text)) {
     return `"${text.replace(/"/g, '""')}"`;
   }
   return text;
 }
 
 function buildIncidentsExportCsv() {
-  const config = readIncidentsConfig(CONFIG_PATH);
-  const snapshot = getIncidentsSnapshot() || {};
-  const liveById = new Map(
-    (snapshot.trucks || []).map((row) => [
-      String(row.truckNumber || "").toUpperCase(),
-      row,
-    ])
-  );
+  return buildTrackingExportCsv("incident", CONFIG_PATH);
+}
 
-  const header = [
-    "Truck",
-    "Driver",
-    "Comment",
-    "Zone",
-    "In Depot",
-    "In Johannesburg",
-    "Location",
-    "Last Checked",
-  ];
-  const lines = [header.join(",")];
-
-  for (const truck of config.trucks) {
-    const live = liveById.get(truck.id) || {};
-    const zone = live.zone || (live.inDepot ? "depot" : live.inJohannesburg ? "johannesburg" : "other");
-    lines.push(
-      [
-        truck.id,
-        truck.driver || "",
-        truck.comment || "",
-        zone,
-        live.inDepot ? "YES" : "NO",
-        live.inJohannesburg ? "YES" : "NO",
-        live.locationText || "",
-        live.checkedAt || "",
-      ]
-        .map(csvEscape)
-        .join(",")
-    );
+function sendTrackingExport(res, reason) {
+  try {
+    const csv = buildTrackingExportCsv(reason, CONFIG_PATH);
+    const filename = trackingExportFilename(reason, { excel: false });
+    res.writeHead(200, {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+      "X-Content-Type-Options": "nosniff",
+      Pragma: "no-cache",
+    });
+    res.end(csv);
+  } catch (error) {
+    sendJson(res, 400, { error: error.message || String(error) });
   }
-
-  // Excel-friendly UTF-8 BOM
-  return `\uFEFF${lines.join("\r\n")}\r\n`;
 }
 
 async function handleApi(req, res, url) {
+  if (req.method === "GET" && url.pathname === "/api/notes") {
+    const category = url.searchParams.get("category");
+    const q = url.searchParams.get("q") || "";
+    return sendJson(res, 200, listNotes({ category, q }));
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/notes") {
+    const body = await readBody(req);
+    const note = createNote(body);
+    return sendJson(res, 200, { note, categories: NOTE_CATEGORIES });
+  }
+
+  const notesMatch = url.pathname.match(/^\/api\/notes\/([^/]+)$/);
+  if (notesMatch) {
+    const id = decodeURIComponent(notesMatch[1]);
+    if (req.method === "PATCH" || req.method === "PUT") {
+      const body = await readBody(req);
+      const result = updateNote(id, body);
+      if (result.missing) return sendJson(res, 404, { error: "Note not found" });
+      return sendJson(res, 200, result);
+    }
+    if (req.method === "DELETE") {
+      const result = deleteNote(id);
+      if (!result.removed) return sendJson(res, 404, { error: "Note not found" });
+      return sendJson(res, 200, result);
+    }
+  }
+
   if (req.method === "GET" && url.pathname === "/api/health") {
     return sendJson(res, 200, {
       ok: true,
@@ -338,6 +525,8 @@ async function handleApi(req, res, url) {
       targetAreas: config.targetAreas,
       pollIntervalMs: config.pollIntervalMs,
       task: getTask("depot-monitor"),
+      reason: "ppe",
+      reasonLabel: reasonLabel("ppe"),
     });
   }
 
@@ -399,19 +588,58 @@ async function handleApi(req, res, url) {
       pollIntervalMs: config.pollIntervalMs,
       johannesburg: getJohannesburgCoverageSummary(),
       task: getTask("incidents-monitor"),
+      reason: "incident",
+      reasonLabel: reasonLabel("incident"),
     });
   }
 
-  if (req.method === "GET" && url.pathname === "/api/incidents/export") {
-    const csv = buildIncidentsExportCsv();
+  if (req.method === "GET" && url.pathname === "/api/wake-trucks") {
+    return sendJson(res, 200, {
+      task: getTask("wake-trucks"),
+      stage2: getWakeStage2(),
+      stage1Trucks: stage1WokenTrucks(),
+    });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/wake-trucks/stage2/start") {
+    const trucks = stage1WokenTrucks();
+    try {
+      const stage2 = startWakeStage2(trucks);
+      queueWakeStage2Lookups(stage2.trucks.map((r) => r.truck));
+      return sendJson(res, 200, { stage2 });
+    } catch (error) {
+      return sendJson(res, 400, { error: error.message || String(error) });
+    }
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/wake-trucks/stage2/stop") {
+    wakeStage2LookupQueue.length = 0;
+    return sendJson(res, 200, { stage2: stopWakeStage2() });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/wake-trucks/stage2/export") {
+    const csv = buildWakeStage2ExportCsv();
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
     res.writeHead(200, {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="incidents-drivers-${stamp}.csv"`,
+      "Content-Disposition": `attachment; filename="wake-trucks-drivers-${stamp}.csv"`,
       "Cache-Control": "no-store",
     });
     res.end(csv);
     return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/incidents/export") {
+    return sendTrackingExport(res, "incident");
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/depot/export") {
+    return sendTrackingExport(res, "ppe");
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/tracking/export") {
+    const reason = url.searchParams.get("reason") || "all";
+    return sendTrackingExport(res, reason);
   }
 
   if (url.pathname === "/api/incidents/trucks") {
@@ -488,6 +716,325 @@ async function handleApi(req, res, url) {
       }
       return sendJson(res, 400, { error: "Provide comment or driver to update" });
     }
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/camera") {
+    const config = readCameraConfig(CONFIG_PATH);
+    return sendJson(res, 200, {
+      camera: getCameraSnapshot(),
+      trucks: config.trucks,
+      pollIntervalMs: config.pollIntervalMs,
+      johannesburg: getJohannesburgCoverageSummary(),
+      task: getTask("camera-monitor"),
+      reason: "camera",
+      reasonLabel: reasonLabel("camera"),
+    });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/camera/export") {
+    return sendTrackingExport(res, "camera");
+  }
+
+  if (url.pathname === "/api/camera/trucks") {
+    if (req.method === "GET") {
+      return sendJson(res, 200, { trucks: listCameraTrucks(CONFIG_PATH) });
+    }
+
+    if (req.method === "POST") {
+      const body = await readBody(req);
+      const truck = body.truck || body.truckNumber;
+      const providedDriver = String(body.driver || "").trim();
+      const providedComment = String(body.comment || "").trim();
+      const providedDevice = String(body.device || body.deviceNumber || "").trim();
+
+      const result = addCameraTruck(truck, {
+        driver: providedDriver,
+        comment: providedComment,
+        device: providedDevice,
+        configPath: CONFIG_PATH,
+      });
+      const restart =
+        body.restart === false ? { restarted: false } : restartCameraIfRunning();
+
+      const shouldLookup =
+        !providedDriver && !body.skipLookup && (result.added || !result.driver);
+      if (shouldLookup) {
+        queueCameraDriverLookup(result.truck || truck);
+      }
+
+      return sendJson(res, 200, {
+        ...result,
+        lookupPending: shouldLookup,
+        lookupError: null,
+        ...restart,
+      });
+    }
+
+    if (req.method === "PUT") {
+      const body = await readBody(req);
+      const result = setCameraTrucks(body.trucks || [], CONFIG_PATH);
+      const restart =
+        body.restart === false ? { restarted: false } : restartCameraIfRunning();
+      return sendJson(res, 200, { ...result, ...restart });
+    }
+  }
+
+  const cameraTruckMatch = url.pathname.match(
+    /^\/api\/camera\/trucks\/([^/]+)(?:\/(comment|device))?$/
+  );
+  if (cameraTruckMatch) {
+    const truck = decodeURIComponent(cameraTruckMatch[1]);
+    const sub = cameraTruckMatch[2] || null;
+
+    if (req.method === "DELETE") {
+      const body = await readBody(req).catch(() => ({}));
+      cancelCameraDriverLookup(truck);
+      const result = removeCameraTruck(truck, CONFIG_PATH);
+      const restart =
+        body.restart === false ? { restarted: false } : restartCameraIfRunning();
+      return sendJson(res, 200, { ...result, ...restart });
+    }
+
+    if (req.method === "PATCH" || req.method === "PUT") {
+      const body = await readBody(req);
+      if (sub === "comment" || body.comment != null) {
+        const result = setCameraTruckComment(truck, body.comment ?? "", CONFIG_PATH);
+        return sendJson(res, 200, result);
+      }
+      if (sub === "device" || body.device != null || body.deviceNumber != null) {
+        const result = setCameraTruckDevice(
+          truck,
+          body.device ?? body.deviceNumber ?? "",
+          CONFIG_PATH
+        );
+        return sendJson(res, 200, result);
+      }
+      if (body.driver != null) {
+        const result = setCameraTruckDriver(truck, body.driver, CONFIG_PATH);
+        return sendJson(res, 200, result);
+      }
+      return sendJson(res, 400, { error: "Provide comment, device, or driver to update" });
+    }
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/tracking") {
+    const depot = readDepotConfig(CONFIG_PATH);
+    const incidents = readIncidentsConfig(CONFIG_PATH);
+    const camera = readCameraConfig(CONFIG_PATH);
+    const depotSnap = getDepotSnapshot() || {};
+    const incidentSnap = getIncidentsSnapshot() || {};
+    const cameraSnap = getCameraSnapshot() || {};
+
+    const trucks = [
+      ...depot.trucks.map((t) => ({
+        ...t,
+        comment: t.comment || "",
+        reason: "ppe",
+        reasonLabel: reasonLabel("ppe"),
+      })),
+      ...incidents.trucks.map((t) => ({
+        ...t,
+        reason: "incident",
+        reasonLabel: reasonLabel("incident"),
+      })),
+      ...camera.trucks.map((t) => ({
+        ...t,
+        reason: "camera",
+        reasonLabel: reasonLabel("camera"),
+      })),
+    ].sort((a, b) => a.id.localeCompare(b.id));
+
+    const cfgByReason = {
+      ppe: new Map(depot.trucks.map((t) => [String(t.id).toUpperCase(), t])),
+      incident: new Map(
+        incidents.trucks.map((t) => [String(t.id).toUpperCase(), t])
+      ),
+      camera: new Map(camera.trucks.map((t) => [String(t.id).toUpperCase(), t])),
+    };
+
+    const liveFrom = (snap, reason) =>
+      (snap.trucks || []).map((row) => {
+        const cfg =
+          cfgByReason[reason]?.get(String(row.truckNumber || "").toUpperCase()) ||
+          {};
+        return {
+          ...row,
+          reason,
+          reasonLabel: reasonLabel(reason),
+          driver: cfg.driver || row.driver || "",
+          comment: cfg.comment || row.comment || "",
+          inDepot:
+            row.inDepot != null ? Boolean(row.inDepot) : Boolean(row.inTargetArea),
+          inJohannesburg: Boolean(row.inJohannesburg),
+          zone:
+            row.zone ||
+            (row.inTargetArea || row.inDepot
+              ? "depot"
+              : row.inJohannesburg
+                ? "johannesburg"
+                : "other"),
+        };
+      });
+
+    const liveRows = [
+      ...liveFrom(depotSnap, "ppe"),
+      ...liveFrom(incidentSnap, "incident"),
+      ...liveFrom(cameraSnap, "camera"),
+    ];
+
+    const inDepot = liveRows.filter((r) => r.inDepot || r.zone === "depot");
+    const inJohannesburg = liveRows.filter(
+      (r) => r.inJohannesburg || r.zone === "johannesburg"
+    );
+
+    return sendJson(res, 200, {
+      reasons: TRACKING_REASON_META,
+      trucks,
+      live: {
+        trucks: liveRows,
+        inDepot,
+        inJohannesburg,
+        inDepotCount: inDepot.length,
+        inJohannesburgCount: inJohannesburg.length,
+      },
+      tasks: {
+        ppe: getTask("depot-monitor"),
+        incident: getTask("incidents-monitor"),
+        camera: getTask("camera-monitor"),
+      },
+      counts: {
+        ppe: depot.trucks.length,
+        incident: incidents.trucks.length,
+        camera: camera.trucks.length,
+        total: trucks.length,
+      },
+      johannesburg: getJohannesburgCoverageSummary(),
+    });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/tracking/trucks") {
+    const body = await readBody(req);
+    const reason = normalizeReason(body.reason);
+    if (!reason) {
+      return sendJson(res, 400, {
+        error: "reason is required: ppe | incident | camera",
+      });
+    }
+    const truck = body.truck || body.truckNumber;
+    const providedDriver = String(body.driver || "").trim();
+    const providedComment = String(body.comment || "").trim();
+
+    if (reason === "ppe") {
+      const result = addDepotTruck(truck, {
+        driver: providedDriver,
+        configPath: CONFIG_PATH,
+      });
+      const restart =
+        body.restart === false ? { restarted: false } : restartDepotIfRunning();
+      const shouldLookup =
+        !providedDriver && !body.skipLookup && (result.added || !result.driver);
+      if (shouldLookup) queueDriverLookup(result.truck || truck);
+      return sendJson(res, 200, {
+        ...result,
+        reason,
+        reasonLabel: reasonLabel(reason),
+        lookupPending: shouldLookup,
+        ...restart,
+      });
+    }
+
+    if (reason === "incident") {
+      const result = addIncidentsTruck(truck, {
+        driver: providedDriver,
+        comment: providedComment,
+        configPath: CONFIG_PATH,
+      });
+      const restart =
+        body.restart === false ? { restarted: false } : restartIncidentsIfRunning();
+      const shouldLookup =
+        !providedDriver && !body.skipLookup && (result.added || !result.driver);
+      if (shouldLookup) queueIncidentsDriverLookup(result.truck || truck);
+      return sendJson(res, 200, {
+        ...result,
+        reason,
+        reasonLabel: reasonLabel(reason),
+        lookupPending: shouldLookup,
+        ...restart,
+      });
+    }
+
+    const result = addCameraTruck(truck, {
+      driver: providedDriver,
+      comment: providedComment,
+      device: String(body.device || body.deviceNumber || "").trim(),
+      configPath: CONFIG_PATH,
+    });
+    const restart =
+      body.restart === false ? { restarted: false } : restartCameraIfRunning();
+    const shouldLookup =
+      !providedDriver && !body.skipLookup && (result.added || !result.driver);
+    if (shouldLookup) queueCameraDriverLookup(result.truck || truck);
+    return sendJson(res, 200, {
+      ...result,
+      reason,
+      reasonLabel: reasonLabel(reason),
+      lookupPending: shouldLookup,
+      ...restart,
+    });
+  }
+
+  const trackingTruckMatch = url.pathname.match(/^\/api\/tracking\/trucks\/([^/]+)$/);
+  if (trackingTruckMatch && req.method === "DELETE") {
+    const truck = decodeURIComponent(trackingTruckMatch[1]);
+    const body = await readBody(req).catch(() => ({}));
+    const reason = normalizeReason(body.reason || url.searchParams.get("reason"));
+    if (!reason) {
+      return sendJson(res, 400, {
+        error: "reason is required: ppe | incident | camera",
+      });
+    }
+
+    if (reason === "ppe") {
+      cancelDriverLookup(truck);
+      const result = removeDepotTruck(truck, CONFIG_PATH);
+      const restart =
+        body.restart === false ? { restarted: false } : restartDepotIfRunning();
+      return sendJson(res, 200, { ...result, reason, reasonLabel: reasonLabel(reason), ...restart });
+    }
+
+    if (reason === "incident") {
+      cancelIncidentsDriverLookup(truck);
+      const result = removeIncidentsTruck(truck, CONFIG_PATH);
+      const restart =
+        body.restart === false ? { restarted: false } : restartIncidentsIfRunning();
+      return sendJson(res, 200, { ...result, reason, reasonLabel: reasonLabel(reason), ...restart });
+    }
+
+    cancelCameraDriverLookup(truck);
+    const result = removeCameraTruck(truck, CONFIG_PATH);
+    const restart =
+      body.restart === false ? { restarted: false } : restartCameraIfRunning();
+    return sendJson(res, 200, { ...result, reason, reasonLabel: reasonLabel(reason), ...restart });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/tracking/start-all") {
+    const results = {};
+    for (const taskId of ["depot-monitor", "incidents-monitor", "camera-monitor"]) {
+      try {
+        results[taskId] = startTask(taskId, { configPath: CONFIG_PATH });
+      } catch (error) {
+        results[taskId] = { error: error.message || String(error) };
+      }
+    }
+    return sendJson(res, 200, { results });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/tracking/stop-all") {
+    const results = {};
+    for (const taskId of ["depot-monitor", "incidents-monitor", "camera-monitor"]) {
+      results[taskId] = stopTask(taskId);
+    }
+    return sendJson(res, 200, { results });
   }
 
   const taskMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)(?:\/(start|stop|logs))?$/);

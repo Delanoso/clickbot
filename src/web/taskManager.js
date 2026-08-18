@@ -3,6 +3,7 @@ import { createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync }
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readTaskStatus, runtimeDir, writeTaskStatus } from "../utils/taskStatus.js";
+import { clearWakeStage2 } from "./wakeStage2.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -27,20 +28,26 @@ export const TASKS = [
   },
   {
     id: "depot-monitor",
-    name: "Depot Monitor",
-    summary: "Watch trucks and alert when they enter Boksburg depot.",
+    name: "Driver PPE",
+    summary: "PPE tracking — watch trucks and alert when they enter Boksburg depot.",
     cli: "depot-monitor",
   },
   {
     id: "incidents-monitor",
-    name: "Incidents and Drivers",
-    summary: "Watch trucks for depot (green) and Johannesburg (yellow) with driver comments.",
+    name: "Driver Incident",
+    summary: "Incident tracking — depot (green) and Johannesburg (yellow) with comments.",
     cli: "incidents-monitor",
+  },
+  {
+    id: "camera-monitor",
+    name: "Truck Camera",
+    summary: "Camera tracking — trucks with cameras not working (depot + Johannesburg).",
+    cli: "camera-monitor",
   },
   {
     id: "wake-trucks",
     name: "Wake Trucks",
-    summary: "Lytx Video Search — Wake/Retry all vehicles, report trucks still not Browse.",
+    summary: "Lytx Video Search — one pass Wake/Retry all pages, run summary in logs.",
     cli: "wake-trucks",
   },
 ];
@@ -80,6 +87,11 @@ export function startTask(taskId, { configPath = "config/local.json" } = {}) {
     return getTask(taskId);
   }
 
+  if (taskId === "wake-trucks") {
+    // Stage 2 is session-only — a new Stage 1 run clears it.
+    clearWakeStage2("Cleared — Stage 1 started");
+  }
+
   mkdirSync(runtimeDir, { recursive: true });
   // Start each task with a fresh log so the dashboard reflects the current
   // run instead of mixing output from older deployments/runs.
@@ -103,6 +115,14 @@ export function startTask(taskId, { configPath = "config/local.json" } = {}) {
 
   child.on("exit", (code) => {
     child.exitCode = code;
+    const prev = readTaskStatus(taskId);
+    if (prev?.state === "done" || prev?.state === "error") {
+      writeTaskStatus(taskId, {
+        ...prev,
+        exitCode: code,
+      });
+      return;
+    }
     writeTaskStatus(taskId, {
       state: "stopped",
       exitCode: code,
@@ -173,4 +193,8 @@ export function getDepotSnapshot() {
 
 export function getIncidentsSnapshot() {
   return readTaskStatus("incidents-monitor");
+}
+
+export function getCameraSnapshot() {
+  return readTaskStatus("camera-monitor");
 }

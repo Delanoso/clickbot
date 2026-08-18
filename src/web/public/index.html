@@ -17,13 +17,14 @@
     <header class="hero">
       <nav class="top-nav">
         <a class="nav-link active" href="/">Home</a>
-        <a class="nav-link" href="/depot">Depot Monitor</a>
-        <a class="nav-link" href="/incidents-drivers">Incidents and Drivers</a>
+        <a class="nav-link" href="/tracking">Tracking</a>
+        <a class="nav-link" href="/wake-trucks">Wake Trucks</a>
+        <a class="nav-link" href="/notes">Notes</a>
       </nav>
       <p class="eyebrow">Personal ops console</p>
       <h1 class="brand">clickbot</h1>
       <p class="lede">
-        Run allocate, FYI, and coaching from here. Depot watch lives on its own page.
+        Run allocate, FYI, and coaching from here. Tracking, Wake Trucks, and Notes each have their own page.
       </p>
       <div class="hero-meta">
         <span id="hostLine">Starting…</span>
@@ -83,38 +84,54 @@
           </div>
         </article>
 
-        <article class="task-panel" data-task="wake-trucks">
+        <article class="task-panel task-panel-link">
           <div class="task-head">
             <h2>Wake Trucks</h2>
-            <span class="status-dot" data-role="dot"></span>
+            <span class="status-dot" id="wakeDot"></span>
           </div>
           <p class="task-copy">
-            Lytx Video Search → Vehicles. Wake/Retry all pages twice (5 min apart), then list trucks still not Browse.
+            Stage 1 wake pass and Stage 2 on a dedicated page.
           </p>
           <dl class="task-stats">
-            <div><dt>State</dt><dd data-role="state">idle</dd></div>
-            <div><dt>Not Browse</dt><dd data-role="detail">—</dd></div>
+            <div><dt>State</dt><dd id="wakeState">idle</dd></div>
+            <div><dt>Woken</dt><dd id="wakeDetail">—</dd></div>
           </dl>
           <div class="task-actions">
-            <button type="button" class="btn primary" data-action="start">Start</button>
-            <button type="button" class="btn" data-action="stop">Stop</button>
+            <a class="btn primary" href="/wake-trucks">Open Wake Trucks</a>
           </div>
         </article>
 
         <article class="task-panel task-panel-link">
           <div class="task-head">
-            <h2>Depot Monitor</h2>
-            <span class="status-dot" id="depotDot"></span>
+            <h2>Tracking</h2>
+            <span class="status-dot" id="trackDot"></span>
           </div>
           <p class="task-copy">
-            Boksburg live board, alerts, and truck watch list on a dedicated page.
+            Driver PPE, Driver Incident, and Truck Camera — with a combined depot / Johannesburg view.
           </p>
           <dl class="task-stats">
-            <div><dt>State</dt><dd id="depotState">idle</dd></div>
-            <div><dt>In depot</dt><dd id="depotDetail">—</dd></div>
+            <div><dt>State</dt><dd id="trackState">idle</dd></div>
+            <div><dt>Watched</dt><dd id="trackDetail">—</dd></div>
           </dl>
           <div class="task-actions">
-            <a class="btn primary" href="/depot">Open depot page</a>
+            <a class="btn primary" href="/tracking">Open tracking</a>
+          </div>
+        </article>
+
+        <article class="task-panel task-panel-link">
+          <div class="task-head">
+            <h2>Notes</h2>
+            <span class="status-dot idle" id="notesHomeDot"></span>
+          </div>
+          <p class="task-copy">
+            Organised notepad for PPE, incidents, cameras, wake trucks, and general ops.
+          </p>
+          <dl class="task-stats">
+            <div><dt>Saved</dt><dd id="notesHomeDetail">—</dd></div>
+            <div><dt>Open</dt><dd>Notes page</dd></div>
+          </dl>
+          <div class="task-actions">
+            <a class="btn primary" href="/notes">Open notes</a>
           </div>
         </article>
       </section>
@@ -131,6 +148,6 @@
       </section>
     </main>
 
-    <script type="module" src="/app.js?v=20260727a"></script>
+    <script type="module" src="/app.js?v=20260818-tracking-restore"></script>
   </body>
 </html>

@@ -5,6 +5,7 @@ import { runFyiNotify } from "./tasks/fyiNotify.js";
 import { runDueForCoaching } from "./tasks/dueForCoaching.js";
 import { runDepotMonitor } from "./tasks/depotMonitor.js";
 import { runIncidentsMonitor } from "./tasks/incidentsMonitor.js";
+import { runCameraMonitor } from "./tasks/cameraMonitor.js";
 import { runWakeTrucks } from "./tasks/wakeTrucks.js";
 
 loadEnvFile();
@@ -62,13 +63,16 @@ async function main() {
     case "incidents-monitor":
       await runIncidentsMonitor(config);
       break;
+    case "camera-monitor":
+      await runCameraMonitor(config);
+      break;
     case "wake-trucks":
       await runWakeTrucks(config);
       break;
     default:
       console.error(`Unknown task: ${args.task}`);
       console.error(
-        "Available tasks: allocate-drivers, fyi-notify, due-for-coaching, depot-monitor, incidents-monitor, wake-trucks"
+        "Available tasks: allocate-drivers, fyi-notify, due-for-coaching, depot-monitor, incidents-monitor, camera-monitor, wake-trucks"
       );
       process.exitCode = 1;
   }
