@@ -103,22 +103,40 @@ export async function runAllocateDrivers(config) {
 
           // Recover by reloading Assign Drivers and clearing filters.
           // The table can temporarily be out of sync with the visible vehicle chip.
-          await lytx.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
-          await ensureLytxAssignPage(lytx, config.apps.dispatch);
-          await clearLytxVehicleFilter(lytx, config.apps.dispatch.selectors);
+          try {
+            await lytx.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
+            await ensureLytxAssignPage(lytx, config.apps.dispatch);
+            await clearLytxVehicleFilter(lytx, config.apps.dispatch.selectors);
 
-          if (
-            noSelectableRowsStreak >= 3 ||
-            !(await hasAssignableRows(lytx, config.apps.dispatch.selectors))
-          ) {
-            console.log("No more select-able rows after multiple retries. Done.");
-            writeTaskStatus("allocate-drivers", {
-              state: "done",
-              message: "No selectable rows",
-              run,
-            });
-            break;
+            let hasRows = false;
+            try {
+              hasRows = await hasAssignableRows(
+                lytx,
+                config.apps.dispatch.selectors
+              );
+            } catch {
+              // If the page is mid-transition, treat as "still try again"
+              // rather than crashing.
+              hasRows = true;
+            }
+
+            if (noSelectableRowsStreak >= 3 || !hasRows) {
+              console.log(
+                "No more select-able rows after multiple retries. Done."
+              );
+              writeTaskStatus("allocate-drivers", {
+                state: "done",
+                message: "No selectable rows",
+                run,
+              });
+              break;
+            }
+          } catch (recoverError) {
+            console.log(
+              `Recovery after no-selectable-rows failed (will skip). ${recoverError.message || recoverError}`
+            );
           }
+
           continue;
         }
         throw error;
