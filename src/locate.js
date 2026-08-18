@@ -73,12 +73,19 @@ export async function clickLocator(locator, { timeout = 10000 } = {}) {
 
   try {
     await locator.click({ timeout });
+    console.log("[clickLocator] click ok (normal)");
     return;
   } catch (error) {
+    console.log(
+      `[clickLocator] click failed (normal). timeout=${timeout}. error=${String(
+        error?.message || error
+      )}`
+    );
     // First try a force click (bypasses hit-testing). If it still fails,
     // fall back to JS click dispatch in the page context.
     try {
       await locator.click({ timeout, force: true });
+      console.log("[clickLocator] click ok (force)");
       return;
     } catch {
       // continue
@@ -87,6 +94,7 @@ export async function clickLocator(locator, { timeout = 10000 } = {}) {
     // Last resort: bypass Playwright hit-testing entirely.
     // Use JS event dispatch so framework click handlers still receive it.
     try {
+      console.log("[clickLocator] click fallback (JS dispatch)");
       await locator.evaluate((el) => {
         if (!(el instanceof Element)) return;
 
@@ -144,6 +152,7 @@ export async function clickLocator(locator, { timeout = 10000 } = {}) {
           // ignore
         }
       });
+      console.log("[clickLocator] click fallback done (JS dispatch)");
       return;
     } catch {
       // If JS click fails, rethrow the original Playwright error.
