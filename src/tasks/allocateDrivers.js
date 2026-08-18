@@ -34,6 +34,7 @@ export async function runAllocateDrivers(config) {
   let lastTruck = null;
   let sameTruckStreak = 0;
   let emptyStreak = 0;
+  let noSelectableRowsStreak = 0;
 
   console.log("Lytx + Webfleet open. Starting full driver allocation loop.");
   console.log(maxRuns > 0 ? `maxRuns=${maxRuns}` : "Running until the Assign Drivers queue is empty.");
@@ -90,6 +91,32 @@ export async function runAllocateDrivers(config) {
           console.log(`Could not assign empty vehicle row: ${error.message}`);
           if (emptyStreak >= 5 || !(await hasAssignableRows(lytx, config.apps.dispatch.selectors))) {
             console.log("No more assignable empty/vehicle rows. Done.");
+            break;
+          }
+          continue;
+        }
+        if (/No selectable rows found for truck/i.test(error.message || "")) {
+          noSelectableRowsStreak += 1;
+          console.log(
+            `Could not select any rows for a truck (recoverable): ${error.message}`
+          );
+
+          // Recover by reloading Assign Drivers and clearing filters.
+          // The table can temporarily be out of sync with the visible vehicle chip.
+          await lytx.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
+          await ensureLytxAssignPage(lytx, config.apps.dispatch);
+          await clearLytxVehicleFilter(lytx, config.apps.dispatch.selectors);
+
+          if (
+            noSelectableRowsStreak >= 3 ||
+            !(await hasAssignableRows(lytx, config.apps.dispatch.selectors))
+          ) {
+            console.log("No more select-able rows after multiple retries. Done.");
+            writeTaskStatus("allocate-drivers", {
+              state: "done",
+              message: "No selectable rows",
+              run,
+            });
             break;
           }
           continue;
