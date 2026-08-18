@@ -2,6 +2,39 @@ import { chromium } from "playwright";
 import { maybeLogin } from "./login.js";
 
 /**
+ * Stub out the Pendo analytics/guide API so that guided walkthroughs never
+ * mount their lightbox/backdrop overlay.  Pendo overlays intercept all pointer
+ * events and cause Playwright click retries to time out.
+ *
+ * This runs as an init script (before any page JS) so Pendo's own bundle
+ * finds window.pendo already defined and skips re-initialisation.
+ */
+async function blockPendo(context) {
+  await context.addInitScript(() => {
+    const noop = () => {};
+    const noopGuide = { show: noop, dismiss: noop, isGuideQualified: () => false };
+    window.pendo = {
+      initialize: noop,
+      identify: noop,
+      track: noop,
+      showGuideById: noop,
+      showGuideByName: noop,
+      startGuides: noop,
+      stopGuides: noop,
+      onGuideDismissed: noop,
+      onGuideShown: noop,
+      getActiveGuide: () => null,
+      getGuides: () => [],
+      findGuideById: () => noopGuide,
+      getCurrentUrl: () => window.location.href,
+      pageLoad: noop,
+      flushNow: noop,
+      teardown: noop,
+    };
+  });
+}
+
+/**
  * Launch Chromium and open both web apps in separate pages
  * so the bot can switch between them without reloading.
  */
@@ -12,6 +45,7 @@ export async function openApps(config) {
   });
 
   const context = await browser.newContext();
+  await blockPendo(context);
 
   const dispatchPage = await context.newPage();
   const fleetPage = await context.newPage();
@@ -57,6 +91,7 @@ export async function openLytxOnly(config) {
   });
 
   const context = await browser.newContext();
+  await blockPendo(context);
   const page = await context.newPage();
 
   await page.goto(config.apps.dispatch.url, {
@@ -82,6 +117,7 @@ export async function openLytxVehicles(config) {
   });
 
   const context = await browser.newContext();
+  await blockPendo(context);
   const page = await context.newPage();
 
   await page.goto(vehicles.url, { waitUntil: "domcontentloaded" });

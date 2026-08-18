@@ -98,15 +98,10 @@ function normalizeVehicle(raw) {
 }
 
 /**
- * Remove any active Pendo overlay/backdrop that intercepts pointer events.
- * Pendo mounts a fixed lightbox + backdrop on top of the app UI during guided
- * walkthroughs.  Those elements sit above everything else in the z-order and
- * absorb all pointer events, causing Playwright click retries to time out.
- *
- * Strategy (safe, non-destructive):
- *   1. Hide the backdrop/mock-flexbox elements via CSS so they stop intercepting.
- *   2. Remove #pendo-base if it is still blocking after that.
- * We only touch Pendo nodes — the real app DOM is untouched.
+ * Fallback: remove any active Pendo overlay/backdrop that intercepts pointer events.
+ * Pendo is blocked at the browser context level via window.pendo stub (browser.js),
+ * but if a cached guide somehow still mounts, this clears it before critical clicks.
+ * Only Pendo-owned DOM nodes are touched.
  */
 async function dismissPendo(page) {
   try {
