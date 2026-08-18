@@ -25,6 +25,7 @@ export async function ensureLytxAssignPage(page, appConfig) {
         selectors.openAssignTile || { text: "UNASSIGNED DRIVERS" };
       try {
         await locate(page, tile).waitFor({ state: "visible", timeout: 90000 });
+        await dismissPendo(page);
         await clickFrom(page, tile);
         await page.waitForURL(/assigndriver/, { timeout: 60000 });
       } catch {
@@ -97,6 +98,42 @@ function normalizeVehicle(raw) {
 }
 
 /**
+ * Remove any active Pendo overlay/backdrop that intercepts pointer events.
+ * Pendo mounts a fixed lightbox + backdrop on top of the app UI during guided
+ * walkthroughs.  Those elements sit above everything else in the z-order and
+ * absorb all pointer events, causing Playwright click retries to time out.
+ *
+ * Strategy (safe, non-destructive):
+ *   1. Hide the backdrop/mock-flexbox elements via CSS so they stop intercepting.
+ *   2. Remove #pendo-base if it is still blocking after that.
+ * We only touch Pendo nodes — the real app DOM is untouched.
+ */
+async function dismissPendo(page) {
+  try {
+    await page.evaluate(() => {
+      // Selectors that appear in the "subtree intercepts pointer events" logs.
+      const PENDO_SELECTORS = [
+        "#pendo-base",
+        "._pendo-step-container",
+        "._pendo-guide-tt_",
+        "[class*='pendo-backdrop']",
+        "[id*='pendo-backdrop']",
+        ".pendo-mock-flexbox-element",
+        "[pendo-region]",
+      ];
+      for (const sel of PENDO_SELECTORS) {
+        document.querySelectorAll(sel).forEach((el) => {
+          el.style.setProperty("pointer-events", "none", "important");
+          el.style.setProperty("display", "none", "important");
+        });
+      }
+    });
+  } catch {
+    // Non-fatal — continue even if the page context is transitioning.
+  }
+}
+
+/**
  * Filter the Assign Drivers list to one vehicle (bulk-assign that truck's events).
  */
 export async function filterLytxByVehicle(page, selectors, truckNumber) {
@@ -107,6 +144,8 @@ export async function filterLytxByVehicle(page, selectors, truckNumber) {
     .first();
   const current = ((await searchDropdown.innerText().catch(() => "")) || "").trim();
   if (!/^Vehicle$/i.test(current)) {
+    // Pendo overlays intercept pointer events and block this click — remove them first.
+    await dismissPendo(page);
     await searchDropdown.click();
     await sleep(600);
     const vehicleOption = page
