@@ -117,6 +117,31 @@ function vehicleMatchesTruck(vehicleText, truckNumber) {
   );
 }
 
+async function waitForLytxVehicleRows(page, truckNumber, { timeoutMs = 8000, intervalMs = 300 } = {}) {
+  const end = Date.now() + timeoutMs;
+  const rows = page.locator(".cdk-row.lytx-table-row");
+  const vehicleCells = page.locator(".cdk-row.lytx-table-row .cdk-column-Vehicle");
+
+  while (Date.now() < end) {
+    const rowCount = await rows.count().catch(() => 0);
+    if (rowCount > 0) {
+      // Check whether any visible row contains a matching vehicle.
+      const cellCount = await vehicleCells.count().catch(() => 0);
+      for (let i = 0; i < Math.min(cellCount, rowCount); i += 1) {
+        const txt = await vehicleCells.nth(i).innerText().catch(() => "");
+        if (vehicleMatchesTruck(txt, truckNumber)) {
+          return true;
+        }
+      }
+
+      // Rows exist but may still be loading; wait more.
+    }
+    await sleep(intervalMs);
+  }
+
+  return false;
+}
+
 /**
  * Fallback: remove any active Pendo overlay/backdrop that intercepts pointer events.
  * Pendo is blocked at the browser context level via window.pendo stub (browser.js),
@@ -223,7 +248,9 @@ export async function filterLytxByVehicle(page, selectors, truckNumber) {
   }
 
   // Wait until visible rows are only this vehicle (best-effort).
-  await sleep(1500);
+  await waitForLytxVehicleRows(page, truckNumber).catch(() => {});
+  // Small buffer for text normalization / final row updates.
+  await sleep(500);
   const vehicles = await page
     .locator(".cdk-row.lytx-table-row .cdk-column-Vehicle")
     .allTextContents();
