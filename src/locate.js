@@ -96,9 +96,59 @@ export async function clickLocator(locator, { timeout = 10000 } = {}) {
     }
 
     // Last resort: bypass Playwright hit-testing entirely.
-    // Use JS dispatch so the UI handlers still receive the click.
+    // Use JS event dispatch so framework click handlers still receive it.
     await locator.evaluate((el) => {
-      el.click();
+      if (!(el instanceof Element)) return;
+
+      // Re-neutralize Pendo immediately before clicking. This covers cases
+      // where Pendo mounts after the init script or in a different timing.
+      const PENDO_NODE_SELECTORS = [
+        "#pendo-base",
+        "._pendo-step-container",
+        "._pendo-guide-tt_",
+        ".pendo-mock-flexbox-element",
+        ".pendo-backdrop-region-left",
+        ".pendo-backdrop-region-right",
+        "[class*='pendo-backdrop']",
+        "[id*='pendo-backdrop']",
+      ];
+      for (const sel of PENDO_NODE_SELECTORS) {
+        document.querySelectorAll(sel).forEach((node) => {
+          node.style.setProperty("pointer-events", "none", "important");
+          node.style.setProperty("display", "none", "important");
+          node.style.setProperty("visibility", "hidden", "important");
+        });
+      }
+
+      // Dispatch a more realistic click sequence (mousedown/mouseup/click)
+      // with coordinates, which is sometimes required for Angular/Material
+      // dropdowns.
+      const r = el.getBoundingClientRect();
+      const x = r.left + Math.max(1, r.width / 2);
+      const y = r.top + Math.max(1, r.height / 2);
+
+      el.dispatchEvent(
+        new MouseEvent("mouseover", { bubbles: true, clientX: x, clientY: y })
+      );
+      el.dispatchEvent(
+        new MouseEvent("mouseenter", { bubbles: true, clientX: x, clientY: y })
+      );
+      el.dispatchEvent(
+        new MouseEvent("mousedown", { bubbles: true, clientX: x, clientY: y })
+      );
+      el.dispatchEvent(
+        new MouseEvent("mouseup", { bubbles: true, clientX: x, clientY: y })
+      );
+      el.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, clientX: x, clientY: y })
+      );
+
+      // Also call the native click() as a final nudge.
+      try {
+        el.click();
+      } catch {
+        // ignore
+      }
     });
   }
 }
