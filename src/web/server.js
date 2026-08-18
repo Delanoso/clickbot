@@ -129,6 +129,7 @@ function serveStatic(req, res, urlPath) {
     relative = "/tracking-camera.html";
   }
   if (relative === "/wake-trucks" || relative === "/wake-trucks/") relative = "/wake-trucks.html";
+  if (relative === "/stale-cameras" || relative === "/stale-cameras/") relative = "/stale-cameras.html";
   if (relative === "/notes" || relative === "/notes/") relative = "/notes.html";
   if (
     relative === "/incidents-drivers" ||
@@ -598,6 +599,16 @@ async function handleApi(req, res, url) {
       task: getTask("wake-trucks"),
       stage2: getWakeStage2(),
       stage1Trucks: stage1WokenTrucks(),
+    });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/stale-cameras") {
+    const task = getTask("stale-cameras");
+    const status = task?.status || {};
+    return sendJson(res, 200, {
+      task,
+      maxAgeDays: status.summary?.maxAgeDays ?? 2,
+      staleTrucks: status.summary?.staleTrucks || status.staleTrucks || [],
     });
   }
 

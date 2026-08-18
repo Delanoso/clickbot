@@ -46,6 +46,10 @@
     "pollIntervalMs": 60000,
     "trucks": []
   },
+  "staleCameras": {
+    "pageSize": 100,
+    "maxAgeDays": 2
+  },
   "wakeTrucks": {
     "pageSize": 100,
     "clickDelayMs": 1000,

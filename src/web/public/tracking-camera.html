@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/styles.css?v=20260814j" />
   </head>
   <body>
     <div class="atmosphere" aria-hidden="true"></div>
@@ -19,14 +19,15 @@
         <a class="nav-link" href="/">Home</a>
         <a class="nav-link active" href="/tracking">Tracking</a>
         <a class="nav-link" href="/wake-trucks">Wake Trucks</a>
+        <a class="nav-link" href="/stale-cameras">Stale Cameras</a>
         <a class="nav-link" href="/notes">Notes</a>
       </nav>
       <div id="trackingSubnav"></div>
       <p class="eyebrow reason-eyebrow reason-camera">Reason · Truck Camera</p>
       <h1 class="brand brand-sm">Truck Camera</h1>
       <p class="lede">
-        Cameras not working — separate from PPE and incident lists. Green = in the Boksburg depot.
-        Yellow = Greater Johannesburg (CoJ + East Rand).
+        Cameras not working — <strong>Not available</strong> vs <strong>Old last communicated</strong>
+        are marked separately. Green = in the Boksburg depot. Yellow = Greater Johannesburg.
       </p>
       <div class="hero-meta">
         <span id="hostLine">Starting…</span>
@@ -45,6 +46,7 @@
         </div>
         <div class="task-actions">
           <button type="button" class="btn" id="exportBtn">Export Excel</button>
+          <a class="btn" href="/stale-cameras">Scan last communicated</a>
           <button type="button" class="btn primary" id="startBtn">Start camera monitor</button>
           <button type="button" class="btn" id="stopBtn">Stop</button>
         </div>
@@ -153,6 +155,6 @@
       </section>
     </main>
 
-    <script type="module" src="/tracking-camera.js?v=20260812d"></script>
+    <script type="module" src="/tracking-camera.js?v=20260813x"></script>
   </body>
 </html>

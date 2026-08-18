@@ -19,12 +19,13 @@
         <a class="nav-link active" href="/">Home</a>
         <a class="nav-link" href="/tracking">Tracking</a>
         <a class="nav-link" href="/wake-trucks">Wake Trucks</a>
+        <a class="nav-link" href="/stale-cameras">Stale Cameras</a>
         <a class="nav-link" href="/notes">Notes</a>
       </nav>
       <p class="eyebrow">Personal ops console</p>
       <h1 class="brand">clickbot</h1>
       <p class="lede">
-        Run allocate, FYI, and coaching from here. Tracking, Wake Trucks, and Notes each have their own page.
+        Run allocate, FYI, and coaching from here. Tracking, Wake Trucks, Stale Cameras, and Notes each have their own page.
       </p>
       <div class="hero-meta">
         <span id="hostLine">Starting…</span>
@@ -103,6 +104,23 @@
 
         <article class="task-panel task-panel-link">
           <div class="task-head">
+            <h2>Stale Cameras</h2>
+            <span class="status-dot" id="staleDot"></span>
+          </div>
+          <p class="task-copy">
+            Scan Last communicated. Not available vs old dates are marked separately on Truck Camera.
+          </p>
+          <dl class="task-stats">
+            <div><dt>State</dt><dd id="staleState">idle</dd></div>
+            <div><dt>Stale</dt><dd id="staleDetail">—</dd></div>
+          </dl>
+          <div class="task-actions">
+            <a class="btn primary" href="/stale-cameras">Open Stale Cameras</a>
+          </div>
+        </article>
+
+        <article class="task-panel task-panel-link">
+          <div class="task-head">
             <h2>Tracking</h2>
             <span class="status-dot" id="trackDot"></span>
           </div>
@@ -148,6 +166,6 @@
       </section>
     </main>
 
-    <script type="module" src="/app.js?v=20260818-tracking-restore"></script>
+    <script type="module" src="/app.js?v=20260818-stale-restore"></script>
   </body>
 </html>

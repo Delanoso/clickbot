@@ -7,6 +7,7 @@ import { runDepotMonitor } from "./tasks/depotMonitor.js";
 import { runIncidentsMonitor } from "./tasks/incidentsMonitor.js";
 import { runCameraMonitor } from "./tasks/cameraMonitor.js";
 import { runWakeTrucks } from "./tasks/wakeTrucks.js";
+import { runStaleCameras } from "./tasks/staleCameras.js";
 
 loadEnvFile();
 const BUILD_MARKER = "build-20260818-allocate-fix-1";
@@ -41,7 +42,8 @@ async function main() {
   const relaxValidation =
     args.task === "fyi-notify" ||
     args.task === "due-for-coaching" ||
-    args.task === "wake-trucks";
+    args.task === "wake-trucks" ||
+    args.task === "stale-cameras";
   const config = loadConfig({
     configPath: args.configPath,
     relaxValidation,
@@ -69,10 +71,13 @@ async function main() {
     case "wake-trucks":
       await runWakeTrucks(config);
       break;
+    case "stale-cameras":
+      await runStaleCameras(config);
+      break;
     default:
       console.error(`Unknown task: ${args.task}`);
       console.error(
-        "Available tasks: allocate-drivers, fyi-notify, due-for-coaching, depot-monitor, incidents-monitor, camera-monitor, wake-trucks"
+        "Available tasks: allocate-drivers, fyi-notify, due-for-coaching, depot-monitor, incidents-monitor, camera-monitor, wake-trucks, stale-cameras"
       );
       process.exitCode = 1;
   }

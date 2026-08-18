@@ -1,4 +1,4 @@
-import { mountTrackingSubnav, downloadExportFile } from "./tracking-shared.js";
+import { mountTrackingSubnav, downloadExportFile, cameraMarkBadgeHtml, cameraMarkLabel } from "./tracking-shared.js";
 mountTrackingSubnav("camera");
 
 const hostLine = document.getElementById("hostLine");
@@ -45,7 +45,7 @@ stopBtn.addEventListener("click", () => controlTask("stop"));
 
 exportBtn.addEventListener("click", (event) => {
   event.preventDefault();
-  void downloadExportFile(`/api/camera/export?t=${Date.now()}`, "truck-camera.csv").catch(
+  void downloadExportFile(`/api/camera/export?t=${Date.now()}`, "truck-camera.xls").catch(
     (error) => {
       truckFormNote.textContent = error.message || "Export failed";
     }
@@ -382,6 +382,8 @@ function matchesSearch(entry, live, query) {
     entry?.device,
     entry?.driver,
     entry?.comment,
+    entry?.mark,
+    cameraMarkLabel(entry?.mark),
     live?.locationText,
     live?.zone,
   ]
@@ -402,7 +404,7 @@ function renderZoneList(el, rows, emptyMessage) {
       const device = row.device ? escapeHtml(row.device) : "";
       const comment = row.comment ? escapeHtml(row.comment) : "";
       return `<div class="truck-row">
-        <strong>${escapeHtml(row.truckNumber)}</strong>
+        <strong>${escapeHtml(row.truckNumber)} ${cameraMarkBadgeHtml(row.mark)}</strong>
         <span>${device ? `Device ${device} · ` : ""}${driver}${comment ? ` · ${comment}` : ""}<br />${escapeHtml(row.locationText || "—")}</span>
       </div>`;
     })
@@ -434,6 +436,7 @@ function renderLive(incidents, configuredTrucks) {
       driver: cfg.driver || "",
       comment: cfg.comment || "",
       device: cfg.device || "",
+      mark: cfg.mark || "",
     };
   };
 
@@ -486,7 +489,7 @@ function renderLive(incidents, configuredTrucks) {
         const device = row.device ? `Device ${escapeHtml(row.device)} · ` : "";
         const comment = row.comment ? ` · ${escapeHtml(row.comment)}` : "";
         return `<div class="truck-chip ${cls}">
-          <strong>${escapeHtml(row.truckNumber)}</strong>
+          <strong>${escapeHtml(row.truckNumber)} ${cameraMarkBadgeHtml(row.mark)}</strong>
           <span>${zoneLabel(zone)} · ${device}${driver}${comment}<br />${escapeHtml(row.locationText || "—")}</span>
         </div>`;
       })
@@ -548,7 +551,7 @@ function renderWatchList(configuredTrucks, liveRows, { force = false } = {}) {
         pendingDevices.has(entry.id) ? pendingDevices.get(entry.id) : entry.device || "";
       return `<div class="watch-row watch-row-incidents ${cls}">
         <div class="watch-main">
-          <strong>${escapeHtml(entry.id)}</strong>
+          <strong>${escapeHtml(entry.id)} ${cameraMarkBadgeHtml(entry.mark)}</strong>
           <span>${metaParts.join(" · ") || "—"}</span>
           <label class="comment-label" for="device-${escapeHtml(entry.id)}">Device</label>
           <input
