@@ -8,6 +8,7 @@ import { runIncidentsMonitor } from "./tasks/incidentsMonitor.js";
 import { runWakeTrucks } from "./tasks/wakeTrucks.js";
 
 loadEnvFile();
+const BUILD_MARKER = "build-20260818-allocate-fix-1";
 
 function parseArgs(argv) {
   const args = { task: "allocate-drivers", configPath: null };
@@ -34,6 +35,8 @@ function parseArgs(argv) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  console.log(`[build] ${BUILD_MARKER}`);
+  console.log(`[run] task=${args.task} cwd=${process.cwd()}`);
   const relaxValidation =
     args.task === "fyi-notify" ||
     args.task === "due-for-coaching" ||

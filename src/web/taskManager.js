@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { createWriteStream, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readTaskStatus, runtimeDir, writeTaskStatus } from "../utils/taskStatus.js";
@@ -81,6 +81,9 @@ export function startTask(taskId, { configPath = "config/local.json" } = {}) {
   }
 
   mkdirSync(runtimeDir, { recursive: true });
+  // Start each task with a fresh log so the dashboard reflects the current
+  // run instead of mixing output from older deployments/runs.
+  writeFileSync(logPath(taskId), "");
   const out = createWriteStream(logPath(taskId), { flags: "a" });
   const child = spawn(
     process.execPath,
