@@ -15,16 +15,16 @@ export const TASKS = [
     cli: "allocate-drivers",
   },
   {
-    id: "fyi-notify",
-    name: "FYI Notify",
-    summary: "Clear Lytx FYI Notify queue (Preview → Resolve → Confirm).",
-    cli: "fyi-notify",
-  },
-  {
     id: "due-for-coaching",
     name: "Due for Coaching",
     summary: "Clear Lytx Due for Coaching (play clips → Complete Session).",
     cli: "due-for-coaching",
+  },
+  {
+    id: "fyi-notify",
+    name: "FYI Notify",
+    summary: "Clear Lytx FYI Notify queue (Preview → Resolve → Confirm).",
+    cli: "fyi-notify",
   },
   {
     id: "depot-monitor",
