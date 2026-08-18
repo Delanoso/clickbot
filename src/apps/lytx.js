@@ -98,6 +98,25 @@ function normalizeVehicle(raw) {
     .trim();
 }
 
+function vehicleMatchesTruck(vehicleText, truckNumber) {
+  const vehicle = normalizeVehicle(vehicleText);
+  const truck = normalizeVehicle(truckNumber);
+  if (!truck) return !vehicle;
+  if (vehicle === truck) return true;
+
+  const truckKey = truck.split(/\s+[–—-]\s+|\s+/)[0];
+  if (!truckKey) return false;
+
+  return (
+    vehicle === truckKey ||
+    vehicle.startsWith(`${truckKey} `) ||
+    vehicle.startsWith(`${truckKey}-`) ||
+    vehicle.startsWith(`${truckKey} –`) ||
+    vehicle.startsWith(`${truckKey} —`) ||
+    vehicle.includes(truckKey)
+  );
+}
+
 /**
  * Fallback: remove any active Pendo overlay/backdrop that intercepts pointer events.
  * Pendo is blocked at the browser context level via window.pendo stub (browser.js),
@@ -248,7 +267,7 @@ export async function assignDriverInLytx(
     );
     if (emptyVehicleOnly) {
       if (vehicleText) continue;
-    } else if (truckNumber && vehicleText !== truckNumber) {
+    } else if (truckNumber && !vehicleMatchesTruck(vehicleText, truckNumber)) {
       continue;
     }
     const box = row.locator("#assignDriverCheckbox, i.checkbox").first();
@@ -283,23 +302,41 @@ export async function assignDriverInLytx(
         }
       }
     } else if (truckNumber) {
-      rowAssign = rows
-        .filter({
-          has: page.locator(".cdk-column-Vehicle", {
-            hasText: new RegExp(
-              truckNumber.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-              "i"
-            ),
-          }),
-        })
-        .getByRole("button", { name: "Assign", exact: true })
-        .first();
+      for (let i = 0; i < rowCount; i += 1) {
+        const row = rows.nth(i);
+        const vehicleText = normalizeVehicle(
+          await row.locator(".cdk-column-Vehicle").innerText().catch(() => "")
+        );
+        if (!vehicleMatchesTruck(vehicleText, truckNumber)) continue;
+
+        const btn = row
+          .locator("button, [role='button'], a")
+          .filter({ hasText: /assign/i })
+          .first();
+        if (await btn.isVisible().catch(() => false)) {
+          rowAssign = btn;
+          break;
+        }
+      }
     } else {
       rowAssign = page.getByRole("button", { name: "Assign", exact: true }).first();
     }
     if (rowAssign && (await rowAssign.isVisible().catch(() => false))) {
-      await rowAssign.click();
+      await clickLocator(rowAssign, { timeout: 10000 });
     } else {
+      const visibleVehicles = [];
+      for (let i = 0; i < rowCount; i += 1) {
+        const row = rows.nth(i);
+        const vehicleText = normalizeVehicle(
+          await row.locator(".cdk-column-Vehicle").innerText().catch(() => "")
+        );
+        if (vehicleText) visibleVehicles.push(vehicleText);
+      }
+      console.log(
+        `[lytx] no selectable rows for ${truckNumber || "(unknown)"}; visible vehicles: ${visibleVehicles
+          .slice(0, 10)
+          .join(", ")}`
+      );
       throw new Error(
         emptyVehicleOnly
           ? "No selectable rows found for empty vehicle number."
