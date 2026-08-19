@@ -814,9 +814,14 @@ export async function scanStaleCameraPages(page, { maxAgeDays = 2, now = new Dat
   await goToFirstPage(page);
   await sleep(500);
   const rowCount = await waitForVehicleDataLoaded(page, 90000);
-  if (rowCount < 20) {
+  if (rowCount < 1) {
     throw new Error(
-      `Stale camera scan cannot run — only ${rowCount} vehicle rows visible (table not loaded)`
+      `Stale camera scan cannot run — no vehicle rows visible (table not loaded). URL: ${page.url()}`
+    );
+  }
+  if (rowCount < 20) {
+    console.log(
+      `[stale-cameras] Warning: only ${rowCount} vehicle rows visible — proceeding anyway`
     );
   }
 

@@ -99,7 +99,10 @@ export function startTask(taskId, { configPath = "config/local.json" } = {}) {
   }
 
   mkdirSync(runtimeDir, { recursive: true });
-  const out = createWriteStream(logPath(taskId), { flags: "a" });
+  // Clear in-memory buffer and start a fresh log file each run so the
+  // Activity view always shows only the current run — not old accumulated output.
+  recentLogs.delete(taskId);
+  const out = createWriteStream(logPath(taskId), { flags: "w" });
   const child = spawn(
     process.execPath,
     ["src/index.js", meta.cli, "--config", configPath],

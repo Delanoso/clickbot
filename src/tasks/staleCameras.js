@@ -30,11 +30,26 @@ export async function runStaleCameras(config) {
   });
 
   try {
+    writeTaskStatus("stale-cameras", {
+      state: "running",
+      message: "Logging in to Lytx Video Search…",
+      added: 0,
+      staleCount: 0,
+    });
     const { browser, page } = await openLytxVehicles(config);
     let pageSizeSet = false;
 
     try {
+      writeTaskStatus("stale-cameras", {
+        state: "running",
+        message: "Navigating to Vehicles list…",
+      });
       await ensureVehiclesListPage(page, vehiclesApp, { ...wake, ...staleCfg });
+
+      writeTaskStatus("stale-cameras", {
+        state: "running",
+        message: "Setting page size…",
+      });
       await setVehiclesPageSize(page, pageSize);
       pageSizeSet = true;
 
