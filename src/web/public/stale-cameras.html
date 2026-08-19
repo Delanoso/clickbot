@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Stale Cameras · clickbot</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css?v=20260814j" />
+  </head>
+  <body>
+    <div class="atmosphere" aria-hidden="true"></div>
+    <header class="hero hero-compact">
+      <nav class="top-nav">
+        <a class="nav-link" href="/">Home</a>
+        <a class="nav-link" href="/tracking">Tracking</a>
+        <a class="nav-link" href="/wake-trucks">Wake Trucks</a>
+        <a class="nav-link active" href="/stale-cameras">Stale Cameras</a>
+        <a class="nav-link" href="/notes">Notes</a>
+      </nav>
+      <p class="eyebrow">Lytx Video Search</p>
+      <h1 class="brand brand-sm">Stale Cameras</h1>
+      <p class="lede">
+        Scan Vehicles. <strong>Not available, No Recent Activity</strong> is marked separately from
+        trucks that still work but last communicated on or before 2 days ago (if today is the 13th,
+        the 11th and earlier, any time). Truck Camera is synced each run: hits are added or updated,
+        and trucks that no longer qualify are removed. Custom comments stay when a truck remains listed.
+      </p>
+      <div class="hero-meta">
+        <span id="hostLine">Starting…</span>
+        <span id="clockLine"></span>
+      </div>
+    </header>
+
+    <main class="depot-main">
+      <section class="control-bar">
+        <div class="control-status">
+          <span class="status-dot" id="staleDot"></span>
+          <div>
+            <strong id="staleState">idle</strong>
+            <p id="staleMessage">Ready to scan Last communicated</p>
+          </div>
+        </div>
+        <div class="task-actions">
+          <a class="btn" href="/tracking/camera">Open Truck Camera</a>
+          <button type="button" class="btn primary" id="startBtn">Start scan</button>
+          <button type="button" class="btn" id="stopBtn">Stop</button>
+        </div>
+      </section>
+
+      <section class="truck-manager" aria-label="Stale camera scan">
+        <div class="section-head">
+          <div>
+            <h2>Last communicated scan</h2>
+            <p>
+              One pass through Lytx Vehicles. No Wake or Retry clicks. Truck Camera is kept in sync
+              with the scan — new hits are added, trucks that recover are removed, and your comments
+              stay when a truck remains listed.
+            </p>
+          </div>
+          <div class="count-block">
+            <span class="count-label">Hits</span>
+            <strong id="staleCount">0</strong>
+          </div>
+        </div>
+
+        <dl class="task-stats wake-stage-stats">
+          <div><dt>Pages</dt><dd id="pagesDetail">—</dd></div>
+          <div><dt>Not available</dt><dd id="unavailableDetail">—</dd></div>
+          <div><dt>Old dates</dt><dd id="oldDateDetail">—</dd></div>
+          <div><dt>Added</dt><dd id="addedDetail">—</dd></div>
+          <div><dt>Removed</dt><dd id="removedDetail">—</dd></div>
+        </dl>
+
+        <div class="section-subhead">
+          <h3>Copy lists</h3>
+          <button type="button" class="btn" id="copyBtn" disabled>Copy lists</button>
+        </div>
+        <pre id="truckList" class="log-view wake-truck-list">Run a scan to list not-available and old-date trucks.</pre>
+        <p id="copyNote" class="form-note"></p>
+
+        <div class="section-subhead">
+          <h3>Not available, No Recent Activity</h3>
+        </div>
+        <div id="unavailableList" class="watch-list"></div>
+
+        <div class="section-subhead">
+          <h3>Working cameras — last communicated on or before 2 days ago</h3>
+        </div>
+        <div id="staleDateList" class="watch-list"></div>
+      </section>
+
+      <section class="log-board" aria-label="Stale Cameras log">
+        <div class="section-head">
+          <div>
+            <h2>Activity</h2>
+            <p>Latest scan lines, including the run summary.</p>
+          </div>
+        </div>
+        <pre id="logView" class="log-view">No log lines yet.</pre>
+      </section>
+    </main>
+
+    <script type="module" src="/stale-cameras.js?v=20260813n"></script>
+  </body>
+</html>

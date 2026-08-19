@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wake Trucks · clickbot</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css?v=20260814j" />
+  </head>
+  <body>
+    <div class="atmosphere" aria-hidden="true"></div>
+    <header class="hero hero-compact">
+      <nav class="top-nav">
+        <a class="nav-link" href="/">Home</a>
+        <a class="nav-link" href="/tracking">Tracking</a>
+        <a class="nav-link active" href="/wake-trucks">Wake Trucks</a>
+        <a class="nav-link" href="/stale-cameras">Stale Cameras</a>
+        <a class="nav-link" href="/notes">Notes</a>
+      </nav>
+      <p class="eyebrow">Lytx Video Search</p>
+      <h1 class="brand brand-sm">Wake Trucks</h1>
+      <p class="lede">
+        Stage 1 wakes trucks. Stage 2 is optional — look up Webfleet drivers when you need them.
+      </p>
+      <div class="hero-meta">
+        <span id="hostLine">Starting…</span>
+        <span id="clockLine"></span>
+      </div>
+    </header>
+
+    <main class="depot-main">
+      <section class="control-bar">
+        <div class="control-status">
+          <span class="status-dot" id="wakeDot"></span>
+          <div>
+            <strong id="wakeState">idle</strong>
+            <p id="wakeMessage">Ready for Stage 1</p>
+          </div>
+        </div>
+        <div class="task-actions">
+          <button type="button" class="btn primary" id="startBtn">Start Stage 1</button>
+          <button type="button" class="btn" id="stopBtn">Stop</button>
+        </div>
+      </section>
+
+      <section class="truck-manager" aria-label="Stage 1 — Wake">
+        <div class="section-head">
+          <div>
+            <h2>Stage 1 — Wake</h2>
+            <p>
+              One pass through Lytx Vehicles. Clicks Wake / Retry on every page, then lists every truck woken.
+              Starting Stage 1 clears any Stage 2 results.
+            </p>
+          </div>
+          <div class="count-block">
+            <span class="count-label">Woken</span>
+            <strong id="wokenCount">0</strong>
+          </div>
+        </div>
+
+        <dl class="task-stats wake-stage-stats">
+          <div><dt>Pages</dt><dd id="pagesDetail">—</dd></div>
+          <div><dt>Result</dt><dd id="resultDetail">—</dd></div>
+        </dl>
+
+        <div class="section-subhead">
+          <h3>Trucks woken — comma-separated</h3>
+          <button type="button" class="btn" id="copyBtn" disabled>Copy list</button>
+        </div>
+        <pre id="truckList" class="log-view wake-truck-list">Run Stage 1 to get the truck list.</pre>
+        <p id="copyNote" class="form-note"></p>
+      </section>
+
+      <section class="truck-manager" aria-label="Stage 2 — Drivers">
+        <div class="section-head">
+          <div>
+            <h2>Stage 2 — Drivers</h2>
+            <p>
+              Optional. Copies Stage 1 woken trucks and looks up each driver’s name in Webfleet.
+              Nothing is saved permanently — rerunning Stage 1 clears this list.
+            </p>
+          </div>
+          <div class="count-block">
+            <span class="count-label">With driver</span>
+            <strong id="stage2DriverCount">0</strong>
+          </div>
+        </div>
+
+        <div class="control-bar wake-stage2-bar">
+          <div class="control-status">
+            <span class="status-dot" id="stage2Dot"></span>
+            <div>
+              <strong id="stage2State">idle</strong>
+              <p id="stage2Message">Optional — run after Stage 1 when you need driver names</p>
+            </div>
+          </div>
+          <div class="task-actions">
+            <button type="button" class="btn primary" id="stage2StartBtn">Start Stage 2</button>
+            <button type="button" class="btn" id="stage2StopBtn">Stop</button>
+            <a class="btn" id="exportBtn" href="/api/wake-trucks/stage2/export">Export Excel</a>
+          </div>
+        </div>
+
+        <p id="stage2Progress" class="form-note"></p>
+        <div id="stage2List" class="watch-list"></div>
+      </section>
+
+      <section class="log-board" aria-label="Wake Trucks log">
+        <div class="section-head">
+          <div>
+            <h2>Activity</h2>
+            <p>Latest Stage 1 lines, including the run summary.</p>
+          </div>
+        </div>
+        <pre id="logView" class="log-view">No log lines yet.</pre>
+      </section>
+    </main>
+
+    <script type="module" src="/wake-trucks.js?v=20260727c"></script>
+  </body>
+</html>

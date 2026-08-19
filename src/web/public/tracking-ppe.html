@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Driver PPE · clickbot</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css?v=20260814j" />
+  </head>
+  <body>
+    <div class="atmosphere" aria-hidden="true"></div>
+    <header class="hero hero-compact">
+      <nav class="top-nav">
+        <a class="nav-link" href="/">Home</a>
+        <a class="nav-link active" href="/tracking">Tracking</a>
+        <a class="nav-link" href="/wake-trucks">Wake Trucks</a>
+        <a class="nav-link" href="/stale-cameras">Stale Cameras</a>
+        <a class="nav-link" href="/notes">Notes</a>
+      </nav>
+      <div id="trackingSubnav"></div>
+      <p class="eyebrow reason-eyebrow reason-ppe">Reason · Driver PPE</p>
+      <h1 class="brand brand-sm">Driver PPE</h1>
+      <p class="lede">
+        Depot PPE checks only. Every truck on this page is tracked for PPE — not incidents or cameras.
+        Live board shows who is in the Boksburg depot / target areas.
+      </p>
+      <div class="hero-meta">
+        <span id="hostLine">Starting…</span>
+        <span id="clockLine"></span>
+      </div>
+    </header>
+
+    <main class="depot-main">
+      <section class="control-bar">
+        <div class="control-status">
+          <span class="status-dot" id="depotDot"></span>
+          <div>
+            <strong id="depotState">idle</strong>
+            <p id="depotMessage">PPE monitor idle</p>
+          </div>
+        </div>
+        <div class="task-actions">
+          <button type="button" class="btn" id="exportBtn">Export Excel</button>
+          <button type="button" class="btn primary" id="startBtn">Start PPE monitor</button>
+          <button type="button" class="btn" id="stopBtn">Stop</button>
+        </div>
+      </section>
+
+      <section class="depot-board" aria-label="PPE live board">
+        <div class="section-head">
+          <div>
+            <h2>In depot <span class="reason-badge reason-ppe">PPE</span></h2>
+            <p id="depotSummary">Waiting for monitor data…</p>
+          </div>
+          <div class="count-block">
+            <span class="count-label">In depot</span>
+            <strong id="inDepotCount">0</strong>
+          </div>
+        </div>
+        <div id="inDepotList" class="truck-list"></div>
+        <div class="section-subhead">
+          <h3>Current locations</h3>
+          <p id="watchedMeta"></p>
+        </div>
+        <div id="allTruckList" class="truck-grid"></div>
+      </section>
+
+      <section class="truck-manager" aria-label="PPE watch list">
+        <div class="section-head">
+          <div>
+            <h2>PPE watch list</h2>
+            <p>
+              Add a truck for <strong>Driver PPE</strong> only. Use <strong>Remove</strong> when handled.
+              Webfleet driver name is looked up automatically.
+            </p>
+          </div>
+          <p id="truckCount" class="muted-strong">0 trucks</p>
+        </div>
+
+        <form id="addTruckForm" class="add-truck-form">
+          <label for="truckInput">Truck number</label>
+          <div class="add-truck-row">
+            <input
+              id="truckInput"
+              name="truck"
+              type="text"
+              placeholder="e.g. R2051 or H2513"
+              autocomplete="off"
+              required
+            />
+            <button type="submit" class="btn primary">Add for PPE</button>
+          </div>
+          <p id="truckFormNote" class="form-note"></p>
+        </form>
+
+        <div class="watch-search">
+          <label for="watchSearchInput">Search PPE list</label>
+          <div class="watch-search-row">
+            <input
+              id="watchSearchInput"
+              type="search"
+              placeholder="Truck number or driver name…"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <button type="button" class="btn" id="watchSearchClear" hidden>Clear</button>
+          </div>
+          <p id="watchSearchNote" class="form-note"></p>
+        </div>
+
+        <div id="watchList" class="watch-list"></div>
+      </section>
+
+      <section class="log-board" aria-label="PPE log">
+        <div class="section-head">
+          <div>
+            <h2>Activity</h2>
+            <p>Latest Driver PPE monitor lines.</p>
+          </div>
+        </div>
+        <pre id="logView" class="log-view">No log lines yet.</pre>
+      </section>
+    </main>
+
+    <script type="module" src="/tracking-ppe.js?v=20260813x"></script>
+  </body>
+</html>

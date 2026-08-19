@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Driver Incident · clickbot</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css?v=20260814j" />
+  </head>
+  <body>
+    <div class="atmosphere" aria-hidden="true"></div>
+    <header class="hero hero-compact">
+      <nav class="top-nav">
+        <a class="nav-link" href="/">Home</a>
+        <a class="nav-link active" href="/tracking">Tracking</a>
+        <a class="nav-link" href="/wake-trucks">Wake Trucks</a>
+        <a class="nav-link" href="/stale-cameras">Stale Cameras</a>
+        <a class="nav-link" href="/notes">Notes</a>
+      </nav>
+      <div id="trackingSubnav"></div>
+      <p class="eyebrow reason-eyebrow reason-incident">Reason · Driver Incident</p>
+      <h1 class="brand brand-sm">Driver Incident</h1>
+      <p class="lede">
+        Incident tracking only — separate from PPE and camera lists. Green = in the Boksburg depot.
+        Yellow = Greater Johannesburg (CoJ + East Rand).
+      </p>
+      <div class="hero-meta">
+        <span id="hostLine">Starting…</span>
+        <span id="clockLine"></span>
+      </div>
+    </header>
+
+    <main class="depot-main">
+      <section class="control-bar">
+        <div class="control-status">
+          <span class="status-dot" id="incidentsDot"></span>
+          <div>
+            <strong id="incidentsState">idle</strong>
+            <p id="incidentsMessage">Incident monitor idle</p>
+          </div>
+        </div>
+        <div class="task-actions">
+          <button type="button" class="btn" id="exportBtn">Export Excel</button>
+          <button type="button" class="btn primary" id="startBtn">Start incident monitor</button>
+          <button type="button" class="btn" id="stopBtn">Stop</button>
+        </div>
+      </section>
+
+      <section class="zone-boards" aria-label="Location boards">
+        <div class="zone-board zone-depot" aria-label="In depot">
+          <div class="section-head">
+            <div>
+              <h2>In depot <span class="reason-badge reason-incident">Incident</span></h2>
+              <p id="depotSummary">Waiting for monitor data…</p>
+            </div>
+            <div class="count-block">
+              <span class="count-label">Depot</span>
+              <strong id="inDepotCount">0</strong>
+            </div>
+          </div>
+          <div id="inDepotList" class="truck-list"></div>
+        </div>
+
+        <div class="zone-board zone-jhb" aria-label="In Johannesburg">
+          <div class="section-head">
+            <div>
+              <h2>In Johannesburg <span class="reason-badge reason-incident">Incident</span></h2>
+              <p id="jhbSummary">Loaded trucks matched to CoJ suburbs / postal codes.</p>
+            </div>
+            <div class="count-block count-jhb">
+              <span class="count-label">JHB</span>
+              <strong id="inJhbCount">0</strong>
+            </div>
+          </div>
+          <div id="inJhbList" class="truck-list"></div>
+        </div>
+      </section>
+
+      <section class="depot-board" aria-label="All watched locations">
+        <div class="section-subhead">
+          <h3>Current locations</h3>
+          <p id="watchedMeta"></p>
+        </div>
+        <div id="allTruckList" class="truck-grid"></div>
+      </section>
+
+      <section class="truck-manager" aria-label="Incident watch list">
+        <div class="section-head">
+          <div>
+            <h2>Incident watch list</h2>
+            <p>
+              Add a truck for <strong>Driver Incident</strong> only. Use <strong>Remove</strong> when handled.
+            </p>
+          </div>
+          <p id="truckCount" class="muted-strong">0 trucks</p>
+        </div>
+
+        <form id="addTruckForm" class="add-truck-form">
+          <label for="truckInput">Truck number</label>
+          <div class="add-truck-row">
+            <input
+              id="truckInput"
+              name="truck"
+              type="text"
+              placeholder="e.g. R2051 or H2513"
+              autocomplete="off"
+              required
+            />
+            <button type="submit" class="btn primary">Add for incident</button>
+          </div>
+          <p id="truckFormNote" class="form-note"></p>
+        </form>
+
+        <div class="watch-search">
+          <label for="watchSearchInput">Search incident list</label>
+          <div class="watch-search-row">
+            <input
+              id="watchSearchInput"
+              type="search"
+              placeholder="Truck, driver, or comment…"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <button type="button" class="btn" id="watchSearchClear" hidden>Clear</button>
+          </div>
+          <p id="watchSearchNote" class="form-note"></p>
+        </div>
+
+        <div id="watchList" class="watch-list"></div>
+      </section>
+
+      <section class="log-board" aria-label="Incident log">
+        <div class="section-head">
+          <div>
+            <h2>Activity</h2>
+            <p id="coverageNote">Latest Driver Incident monitor lines.</p>
+          </div>
+        </div>
+        <pre id="logView" class="log-view">No log lines yet.</pre>
+      </section>
+    </main>
+
+    <script type="module" src="/tracking-incident.js?v=20260813x"></script>
+  </body>
+</html>

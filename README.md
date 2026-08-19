@@ -1,1 +1,243 @@
 # clickbot
+
+Browser automation for repetitive work across two web apps at once.
+
+## Task 1: Allocate drivers to trucks
+
+The bot keeps **both apps open** and loops this flow:
+
+1. **Dispatch app** — read the truck number (fixed spot on the page)
+2. **Fleet app** — search that truck, read the driver name (fixed spot)
+3. **Dispatch app** — paste the driver name
+4. If the name is missing or invalid → paste **`Driver Unknown`**
+
+## What you need for it to run
+
+| For local testing (no real apps) | For your real apps |
+| --- | --- |
+| Nothing else — use the built-in demo | **App 1:** [Lytx](https://login.lytx.com) (configured) |
+| `npm run demo` | **App 2:** [Webfleet](https://www.webfleet.com/webfleet/products/login/?application=webfleet) (configured) |
+| | CSS selectors for truck #, search, driver name, paste field |
+| | Logins (manual in browser, or env vars in `.env`) |
+
+### Progress
+
+- [x] App 1 URL: Lytx (`https://login.lytx.com` → Assign Drivers)
+- [x] App 2 URL: Webfleet (`live-wf.webfleet.com/web/map`)
+- [x] Login forms for both apps
+- [x] Workflow from screenshots: read VEHICLE → Webfleet DRIVER name → Lytx Assign modal
+- [ ] Live selector fine-tuning after first real run (Angular/Material DOM can vary)
+
+### Real workflow (from your screenshots)
+
+1. **Lytx** `Assign Drivers` — read truck id from the **VEHICLE** column (e.g. `TH2239`)
+2. **Webfleet** map — search that truck under **VEHICLES**, open it, copy **DRIVER → Name** (phones stripped)
+3. **Lytx** — filter/select that vehicle’s events, open **Assign Driver**, paste into **Search Name or ID**, click **Assign**
+4. If Webfleet has no usable name, **or the name is not in the Lytx dropdown** → select **`Driver Unknown`** (it is in the dropdown) and assign that
+
+## Quick test (demo apps)
+
+This spins up two fake local web apps and runs the bot against them (4 trucks):
+
+```bash
+npm install
+npm run install-browsers
+npm run demo
+```
+
+Expected results:
+
+- `T-1001` → Alex Rivera
+- `T-1002` → Driver Unknown (name not in Lytx dropdown)
+- `T-1003` → Driver Unknown (fleet returns `N/A`)
+- `T-404` → Driver Unknown (no driver found)
+
+## Real apps setup
+
+```bash
+npm install
+npm run install-browsers
+cp config/local.example.json config/local.json
+cp .env.example .env   # optional, for automated Lytx login
+```
+
+Open both apps (manual login by default):
+
+```bash
+npm run explore
+```
+
+With `login.manual: true` (default), the browser opens **Lytx** and **Webfleet** and waits for you to sign in on each. Set credentials in `.env` and `"manual": false` to automate:
+
+- Lytx: `LYTX_USERNAME`, `LYTX_PASSWORD`
+- Webfleet: `WEBFLEET_ACCOUNT`, `WEBFLEET_USERNAME`, `WEBFLEET_PASSWORD`
+
+`config/local.example.json` is already filled from your screenshots. Key fields:
+
+| Field | Purpose |
+| --- | --- |
+| `apps.dispatch.workUrl` | Lytx Assign Drivers page |
+| `apps.dispatch.selectors.firstVehicleCell` | VEHICLE column cell to read |
+| `apps.dispatch.selectors.vehicleSearchInput` | Filter by vehicle (`Search Vehicle Name`) |
+| `apps.dispatch.selectors.assignSelectedButton` | Opens bulk Assign Driver modal |
+| `apps.dispatch.selectors.driverNameInput` | Modal field `Search Name or ID` |
+| `apps.fleet.workUrl` | Webfleet map |
+| `apps.fleet.selectors.searchInput` | Vehicles search box |
+| `apps.fleet.selectors.driverNameResult` | Optional; otherwise DRIVER Name is auto-detected |
+
+Tip: if a click misses in the real apps, right-click the element → Inspect → Copy selector and put it in `config/local.json`.
+
+## Task 2: FYI Notify (Lytx only)
+
+Same Lytx login. From the Driver Safety dashboard:
+
+1. Open **FYI NOTIFY**
+2. Click **Preview** on a card
+3. Scroll to **Resolve** → **Yes, Confirm**
+4. Repeat until no FYI Notify items remain
+
+```bash
+npm run fyi
+```
+
+## Task 2b: Due for Coaching (Lytx only)
+
+Same Lytx login. From the Driver Safety dashboard:
+
+1. Open **DUE FOR COACHING**
+2. Click **Coach Event** / **Coach N Events** on a card
+3. Play each event video for at least 1 second
+   - Multiple videos: step through the carousel and play each
+   - Single video: scroll to the player and press **Play**
+4. Scroll to **Complete Session** → **Complete** → **Close**
+5. Repeat until the Due for Coaching queue is empty
+
+```bash
+npm run coach
+```
+
+## Task 3: Depot monitor (Webfleet only)
+
+This task watches a list of trucks in Webfleet and alerts when one of them
+enters a target area such as your depot.
+
+How it works:
+
+1. Open Webfleet
+2. Search each configured truck
+3. Read its visible location/area text
+4. If that text contains your configured depot term(s), print an **ALERT**
+5. Keep polling on a timer and only alert again when a truck newly enters
+
+Example `config/local.json`:
+
+```json
+{
+  "depotMonitor": {
+    "pollIntervalMs": 60000,
+    "targetArea": "HFR - Boksburg Depot",
+    "targetAreas": ["HFR - Boksburg Depot", "Boksburg Depot"],
+    "trucks": ["H2512", "NH2482"],
+    "workUrl": "https://live-wf.webfleet.com/web/map",
+    "selectors": {
+      "searchInput": { "placeholder": "Search" },
+      "locationText": null,
+      "detailText": null,
+      "resultItem": null,
+      "resultRow": null,
+      "vehicleColumnName": "Vehicle",
+      "locationColumnName": "Location",
+      "locationColumnIndex": null
+    }
+  }
+}
+```
+
+Run it with:
+
+```bash
+npm run depot
+```
+
+Notes:
+
+- `targetArea` / `targetAreas` are simple case-insensitive text matches.
+- The alert is printed to the terminal with a bell character.
+- If Webfleet needs custom selectors for the visible location text, add them in
+  `depotMonitor.selectors.locationText` or `detailText`.
+- If your Webfleet view is table-based, `resultRow` plus
+  `vehicleColumnName` / `locationColumnName` can be enough without detail
+  selectors.
+
+## Personal dashboard (LAN / your IP)
+
+Host a small local web app to start/stop tasks and watch depot status:
+
+```bash
+npm run dashboard
+```
+
+Then open `http://YOUR_IP:8787` from a phone/laptop on the same network.
+
+The dashboard currently covers:
+
+1. **Allocate Drivers**
+2. **FYI Notify**
+3. **Depot Monitor** (live in-depot board)
+
+Default bind is `0.0.0.0:8787`. Override with:
+
+```bash
+DASHBOARD_HOST=0.0.0.0 DASHBOARD_PORT=8787 npm run dashboard
+```
+
+## Run
+
+```bash
+npm run allocate
+```
+
+Or:
+
+```bash
+npm start
+```
+
+The browser opens both pages. Leave it running; press `Ctrl+C` to stop.
+
+### Useful config knobs
+
+- `headless: false` — keep the browser visible (recommended while setting selectors)
+- `loop.maxRuns` — `0` means run forever; set e.g. `10` for a short test
+- `loop.delayBetweenRunsMs` — pause between trucks
+- `defaultDriverName` — fallback when lookup fails (default: `Driver Unknown`)
+
+## Project layout
+
+```
+config/
+  default.json          # shared defaults (Lytx + Webfleet)
+  local.example.json    # template — copy to local.json
+  local.json            # your overrides (gitignored)
+  demo.json             # local fake apps for npm run demo
+src/
+  index.js              # entrypoint / task router
+  browser.js            # open apps + login
+  web/
+    server.js           # personal LAN dashboard
+    public/             # dashboard UI
+    taskManager.js      # start/stop task processes
+  apps/
+    lytx.js             # Assign Drivers page actions
+    webfleet.js         # map/drivers lookup helpers
+  tasks/
+    allocateDrivers.js  # task 1 loop
+    fyiNotify.js        # task 2 loop
+    depotMonitor.js     # task 3 loop
+  utils/
+    driverName.js       # name cleanup + fallback
+    depotMonitor.js     # area matching helpers
+    taskStatus.js       # runtime status files for dashboard
+```
+
+More tasks can be added under `src/tasks/` and wired in `src/index.js`.

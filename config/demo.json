@@ -1,0 +1,37 @@
+{
+  "headless": true,
+  "slowMoMs": 0,
+  "defaultDriverName": "Driver Unknown",
+  "loop": {
+    "enabled": true,
+    "delayBetweenRunsMs": 300,
+    "maxRuns": 4
+  },
+  "apps": {
+    "dispatch": {
+      "url": "http://127.0.0.1:4173/dispatch",
+      "workUrl": "http://127.0.0.1:4173/dispatch",
+      "login": { "enabled": false },
+      "selectors": {
+        "pageReady": { "text": "ASSIGN DRIVERS" },
+        "firstVehicleCell": "table tbody tr:first-child td:nth-child(3)",
+        "vehicleSearchInput": { "placeholder": "Search Vehicle Name" },
+        "selectAllCheckbox": "#select-all",
+        "assignSelectedButton": { "role": "button", "name": "Assign Selected" },
+        "rowAssignButton": { "role": "button", "name": "Assign", "exact": true },
+        "driverNameInput": { "placeholder": "Search Name or ID" },
+        "assignConfirmButton": "#confirm-assign"
+      }
+    },
+    "fleet": {
+      "url": "http://127.0.0.1:4173/fleet",
+      "workUrl": "http://127.0.0.1:4173/fleet",
+      "login": { "enabled": false },
+      "selectors": {
+        "vehiclesTab": { "text": "VEHICLES" },
+        "searchInput": { "placeholder": "Search" },
+        "driverNameResult": "#driver-name"
+      }
+    }
+  }
+}
