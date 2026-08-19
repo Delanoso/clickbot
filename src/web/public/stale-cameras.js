@@ -37,13 +37,45 @@ copyBtn.addEventListener("click", async () => {
 async function controlTask(action) {
   startBtn.disabled = true;
   stopBtn.disabled = true;
+
+  // Give immediate feedback instead of waiting for the next polling tick.
+  if (action === "start") {
+    staleState.textContent = "running";
+    staleDot.className = "status-dot running";
+    staleMessage.textContent = "Starting scan…";
+  } else if (action === "stop") {
+    staleState.textContent = "stopped";
+    staleDot.className = "status-dot stopped";
+    staleMessage.textContent = "Stopping…";
+  }
+
   try {
-    const res = await fetch(`/api/tasks/stale-cameras/${action}`, { method: "POST" });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Request failed");
+    const res = await fetch(`/api/tasks/stale-cameras/${action}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+
+    let data = {};
+    try {
+      data = await res.json();
+    } catch {
+      // Non-JSON response (rare, but keep UI error readable)
+      data = { error: `HTTP ${res.status}` };
+    }
+
+    if (!res.ok) throw new Error(data.error || `Request failed (HTTP ${res.status})`);
+
+    // Refresh once right away; then again shortly after to avoid rare races
+    // where the task status file updates slightly later than this request.
+    await refresh();
+    await new Promise((resolve) => setTimeout(resolve, 750));
     await refresh();
   } catch (error) {
     logView.textContent = `Error: ${error.message}`;
+    staleState.textContent = "error";
+    staleDot.className = "status-dot error";
+    staleMessage.textContent = error.message || "Error starting scan";
   } finally {
     startBtn.disabled = false;
     stopBtn.disabled = false;
