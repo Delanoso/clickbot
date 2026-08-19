@@ -174,19 +174,40 @@ async function refreshLogs() {
 }
 
 async function refresh() {
-  const [healthRes, staleRes] = await Promise.all([
-    fetch("/api/health"),
-    fetch("/api/stale-cameras"),
-  ]);
-  const health = await healthRes.json();
-  const stale = await staleRes.json();
+  // We avoid Promise.all here so /api/health failures don’t block UI updates.
+  try {
+    const [healthRes, staleRes] = await Promise.allSettled([
+      fetch("/api/health"),
+      fetch("/api/stale-cameras"),
+    ]);
 
-  const ip = (health.addresses && health.addresses[0]) || location.hostname;
-  hostLine.textContent = `http://${ip}${location.port ? `:${location.port}` : ""}/stale-cameras`;
-  clockLine.textContent = new Date().toLocaleString();
+    const health =
+      healthRes.status === "fulfilled" ? await healthRes.value.json().catch(() => null) : null;
+    const stale =
+      staleRes.status === "fulfilled" ? await staleRes.value.json().catch(() => null) : null;
 
-  renderStale(stale.task);
-  await refreshLogs();
+    const ip = (health?.addresses && health.addresses[0]) || location.hostname;
+    hostLine.textContent = `http://${ip}${location.port ? `:${location.port}` : ""}/stale-cameras`;
+    clockLine.textContent = new Date().toLocaleString();
+
+    if (stale?.task) {
+      renderStale(stale.task);
+    } else {
+      // Keep the UI usable even if /api/stale-cameras failed to decode.
+      staleState.textContent = "error";
+      staleDot.className = "status-dot error";
+      staleMessage.textContent = "Could not load stale-cameras status";
+    }
+
+    await refreshLogs();
+  } catch (error) {
+    // Last-resort: update the header + show an error state so users know polling is broken.
+    const ip = location.hostname;
+    hostLine.textContent = `http://${ip}${location.port ? `:${location.port}` : ""}/stale-cameras`;
+    staleState.textContent = "error";
+    staleDot.className = "status-dot error";
+    staleMessage.textContent = `UI refresh failed`;
+  }
 }
 
 refresh();
