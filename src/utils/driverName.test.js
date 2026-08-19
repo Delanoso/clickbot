@@ -1,0 +1,80 @@
+import {
+  cleanDriverName,
+  resolveDriverName,
+  shouldForceDefaultDriver,
+  isPlaceholderDriverName,
+} from "./driverName.js";
+
+const config = {
+  defaultDriverName: "Driver Unknown",
+  validation: {
+    minNameLength: 2,
+    invalidNames: ["", "n/a", "na", "null", "undefined", "-", "--"],
+  },
+};
+
+function assert(condition, message) {
+  if (!condition) {
+    throw new Error(message);
+  }
+}
+
+const valid = resolveDriverName("  Jane Doe  ", config);
+assert(valid.name === "Jane Doe", "should keep valid name");
+assert(valid.usedFallback === false, "valid name should not use fallback");
+
+const empty = resolveDriverName("   ", config);
+assert(empty.name === "Driver Unknown", "empty should fall back");
+
+const invalid = resolveDriverName("N/A", config);
+assert(invalid.name === "Driver Unknown", "N/A should fall back");
+
+const missing = resolveDriverName(null, config);
+assert(missing.name === "Driver Unknown", "null should fall back");
+
+const fromList = cleanDriverName("TH2239 - Phillip Mofokeng");
+assert(fromList === "Phillip Mofokeng", "should strip vehicle id prefix");
+
+const withPhones = cleanDriverName("Sipha Khanyi 083 879 3215 / 063 735 0503");
+assert(withPhones === "Sipha Khanyi", `should strip phones, got: ${withPhones}`);
+
+const withIntl = cleanDriverName("Sipha Khanyi +27 83 879 3215");
+assert(withIntl === "Sipha Khanyi", `should strip +27 phone, got: ${withIntl}`);
+
+const withNamibia = cleanDriverName("Gerson Shooya +264 81 383 3961");
+assert(withNamibia === "Gerson Shooya", `should strip +264 phone, got: ${withNamibia}`);
+
+const dualNoSpace = cleanDriverName("ANTONIO HAIPINGE +264817891716//063 074 9416");
+assert(
+  dualNoSpace === "ANTONIO HAIPINGE",
+  `should strip jammed dual phones, got: ${dualNoSpace}`
+);
+
+const withDashPhone = cleanDriverName("Jane Doe 083-879-3215");
+assert(withDashPhone === "Jane Doe", `should strip dashed phone, got: ${withDashPhone}`);
+
+const nameOnly = cleanDriverName("Obvios Mukarati");
+assert(nameOnly === "Obvios Mukarati", "name without phone stays unchanged");
+
+const resolvedPhones = resolveDriverName(
+  "Sipha Khanyi 083 879 3215 / 063 735 0503",
+  config
+);
+assert(
+  resolvedPhones.name === "Sipha Khanyi",
+  `resolve must return name only, got: ${resolvedPhones.name}`
+);
+assert(!/\d/.test(resolvedPhones.name), "resolved name must not contain digits from phones");
+
+assert(shouldForceDefaultDriver("H2161 - Sold") === true, "sold should force default");
+assert(shouldForceDefaultDriver("LDV1801") === true, "LDV should be skipped");
+assert(shouldForceDefaultDriver("Demo 95") === false, "demo must NOT be skipped");
+assert(shouldForceDefaultDriver("H2100 Accident") === true, "accident should force default");
+assert(shouldForceDefaultDriver("H2325") === false, "normal truck should look up");
+
+assert(isPlaceholderDriverName("DRIVER") === true, "DRIVER is placeholder");
+assert(isPlaceholderDriverName("NO DRIVER") === true, "NO DRIVER is placeholder");
+assert(resolveDriverName("DRIVER", config).name === "Driver Unknown", "DRIVER falls back");
+assert(resolveDriverName("Obvios Mukarati", config).name === "Obvios Mukarati", "real name kept");
+
+console.log("driverName tests passed");

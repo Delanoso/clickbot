@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Notes · clickbot</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="atmosphere" aria-hidden="true"></div>
+    <header class="hero hero-compact">
+      <nav class="top-nav">
+        <a class="nav-link" href="/">Home</a>
+        <a class="nav-link" href="/tracking">Tracking</a>
+        <a class="nav-link" href="/wake-trucks">Wake Trucks</a>
+        <a class="nav-link active" href="/notes">Notes</a>
+      </nav>
+      <p class="eyebrow">Ops notepad</p>
+      <h1 class="brand brand-sm">Notes</h1>
+      <p class="lede">
+        Keep PPE, incident, camera, and wake notes organised in one place. Pin what matters.
+      </p>
+      <div class="hero-meta">
+        <span id="hostLine">Starting…</span>
+        <span id="clockLine"></span>
+      </div>
+    </header>
+
+    <main class="depot-main">
+      <section class="control-bar notes-toolbar">
+        <div class="control-status">
+          <span class="status-dot idle" id="notesDot"></span>
+          <div>
+            <strong id="notesCountLabel">0 notes</strong>
+            <p id="notesStatus">Saved on this server</p>
+          </div>
+        </div>
+        <div class="task-actions">
+          <button type="button" class="btn primary" id="newNoteBtn">New note</button>
+        </div>
+      </section>
+
+      <section class="notes-layout" aria-label="Notes">
+        <aside class="notes-sidebar">
+          <div class="section-head">
+            <div>
+              <h2>Categories</h2>
+              <p>Filter by section</p>
+            </div>
+          </div>
+          <div id="categoryList" class="notes-categories"></div>
+
+          <div class="watch-search notes-search">
+            <label for="notesSearch">Search</label>
+            <div class="watch-search-row">
+              <input
+                id="notesSearch"
+                type="search"
+                placeholder="Title, body, or tag…"
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <button type="button" class="btn" id="notesSearchClear" hidden>Clear</button>
+            </div>
+          </div>
+        </aside>
+
+        <div class="notes-main">
+          <section class="truck-manager notes-editor" id="editorPanel" hidden>
+            <div class="section-head">
+              <div>
+                <h2 id="editorTitle">New note</h2>
+                <p id="editorHint">Write and save — changes stay on this VPS.</p>
+              </div>
+              <div class="task-actions">
+                <button type="button" class="btn" id="cancelEditBtn">Cancel</button>
+                <button type="submit" class="btn primary" id="saveNoteBtn" form="noteForm">Save</button>
+              </div>
+            </div>
+            <form id="noteForm" class="note-form">
+              <input type="hidden" id="noteId" value="" />
+              <label for="noteTitle">Title</label>
+              <input id="noteTitle" type="text" maxlength="160" placeholder="Short title" required />
+
+              <div class="note-form-row">
+                <div>
+                  <label for="noteCategory">Category</label>
+                  <select id="noteCategory"></select>
+                </div>
+                <div>
+                  <label for="noteTags">Tags</label>
+                  <input
+                    id="noteTags"
+                    type="text"
+                    placeholder="e.g. boksburg, follow-up"
+                    autocomplete="off"
+                  />
+                </div>
+              </div>
+
+              <label class="note-pin-row">
+                <input type="checkbox" id="notePinned" />
+                Pin to top
+              </label>
+
+              <label for="noteBody">Note</label>
+              <textarea
+                id="noteBody"
+                rows="10"
+                placeholder="Write your note here…"
+              ></textarea>
+              <p id="noteFormNote" class="form-note"></p>
+              <div class="task-actions">
+                <button type="submit" class="btn primary" id="saveNoteBtnBottom">Save note</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="truck-manager" aria-label="Note list">
+            <div class="section-head">
+              <div>
+                <h2>Your notes</h2>
+                <p id="listMeta">All notes</p>
+              </div>
+            </div>
+            <div id="notesList" class="notes-list"></div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="/notes.js?v=20260812b"></script>
+  </body>
+</html>
