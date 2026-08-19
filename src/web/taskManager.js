@@ -59,6 +59,7 @@ export const TASKS = [
 ];
 
 const processes = new Map();
+const logStreams = new Map();
 
 function logPath(taskId) {
   return join(runtimeDir, `${taskId}.log`);
@@ -102,7 +103,11 @@ export function startTask(taskId, { configPath = "config/local.json" } = {}) {
   // Clear in-memory buffer and start a fresh log file each run so the
   // Activity view always shows only the current run — not old accumulated output.
   recentLogs.delete(taskId);
+  // Close any previous stream before creating a new one to avoid ERR_STREAM_WRITE_AFTER_END.
+  const prevOut = logStreams.get(taskId);
+  if (prevOut && !prevOut.destroyed) prevOut.destroy();
   const out = createWriteStream(logPath(taskId), { flags: "w" });
+  logStreams.set(taskId, out);
   const child = spawn(
     process.execPath,
     ["src/index.js", meta.cli, "--config", configPath],
