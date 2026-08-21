@@ -5,6 +5,7 @@ import {
   trackingExportHeader,
   TRACKING_EXPORT_HEADER,
 } from "./trackingExport.js";
+import { isCameraExcelYellow } from "./cameraConfig.js";
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -77,5 +78,14 @@ assert(csvCell("line1\r\nline2") === "line1 line2", "csv cells flatten CRLF");
 assert(csvCell("line1\nline2") === "line1 line2", "csv cells flatten LF");
 assert(!csvCell("a\r\nb").includes("\r"), "csv cells contain no CR");
 assert(!csvCell("a\r\nb").includes("\n"), "csv cells contain no LF");
+
+assert(
+  isCameraExcelYellow({ listedSince: "2026-08-01" }, new Date("2026-08-21T12:00:00Z")),
+  "long-listed truck is yellow"
+);
+assert(
+  !isCameraExcelYellow({ listedSince: "2026-08-21" }, new Date("2026-08-21T12:00:00Z")),
+  "first day stays white"
+);
 
 console.log("trackingExport tests passed");

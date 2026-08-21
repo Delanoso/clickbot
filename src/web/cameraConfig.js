@@ -82,6 +82,48 @@ function withConfigLock(configPath, fn) {
   }
 }
 
+/** Calendar date YYYY-MM-DD in Africa/Johannesburg (ops timezone). */
+export function todayListedDate(now = new Date()) {
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Africa/Johannesburg",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(now);
+  } catch {
+    return now.toISOString().slice(0, 10);
+  }
+}
+
+export function normalizeListedSince(value) {
+  const raw = String(value || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  if (!raw) return "";
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return todayListedDate(parsed);
+}
+
+/**
+ * How many calendar days this truck has been on the current consecutive list streak.
+ * Day 1 = listedSince is today. Missing listedSince → 1 (treat as first day / white).
+ */
+export function consecutiveListedDays(listedSince, now = new Date()) {
+  const since = normalizeListedSince(listedSince);
+  if (!since) return 1;
+  const today = todayListedDate(now);
+  const start = Date.parse(`${since}T12:00:00Z`);
+  const end = Date.parse(`${today}T12:00:00Z`);
+  if (Number.isNaN(start) || Number.isNaN(end) || end < start) return 1;
+  return Math.floor((end - start) / 86400000) + 1;
+}
+
+/** Yellow in Truck Camera Excel once the truck has been on the list 2+ consecutive days. */
+export function isCameraExcelYellow(truck, now = new Date()) {
+  return consecutiveListedDays(truck?.listedSince, now) >= 2;
+}
+
 export function normalizeCameraTruckEntry(value) {
   if (value && typeof value === "object") {
     const id = normalizeTruckId(value.id || value.truck || value.truckNumber || "");
@@ -92,11 +134,12 @@ export function normalizeCameraTruckEntry(value) {
       comment: String(value.comment || "").trim(),
       device: String(value.device || value.deviceNumber || "").trim(),
       mark: normalizeCameraMark(value.mark || value.cameraMark || value.issue || ""),
+      listedSince: normalizeListedSince(value.listedSince || value.listed_since || ""),
     };
   }
   const id = normalizeTruckId(value);
   if (!id) return null;
-  return { id, driver: "", comment: "", device: "", mark: "" };
+  return { id, driver: "", comment: "", device: "", mark: "", listedSince: "" };
 }
 
 export function normalizeCameraTruckEntries(list) {
@@ -164,6 +207,11 @@ function upsertCameraTruckInMemory(
 
   if (existing) {
     let updated = false;
+    if (!normalizeListedSince(existing.listedSince)) {
+      // Start streak tracking for older entries that predate listedSince.
+      existing.listedSince = todayListedDate();
+      updated = true;
+    }
     if (driverName && existing.driver !== driverName) {
       existing.driver = driverName;
       updated = true;
@@ -197,6 +245,7 @@ function upsertCameraTruckInMemory(
       comment: existing.comment || "",
       device: existing.device || "",
       mark: existing.mark || "",
+      listedSince: existing.listedSince || "",
     };
   }
 
@@ -208,6 +257,8 @@ function upsertCameraTruckInMemory(
     comment: resolvedComment,
     device: deviceNumber,
     mark: resolvedMark,
+    // New / re-added after removal → streak starts today (Excel stays white until day 2).
+    listedSince: todayListedDate(),
   };
   return {
     trucks: [...trucks, entry],
@@ -412,16 +463,28 @@ export function setCameraTrucks(truckNumbers, configPath = DEFAULT_CONFIG) {
     const previous = new Map(
       current.trucks.map((entry) => [
         entry.id,
-        { driver: entry.driver, comment: entry.comment, device: entry.device, mark: entry.mark },
+        {
+          driver: entry.driver,
+          comment: entry.comment,
+          device: entry.device,
+          mark: entry.mark,
+          listedSince: entry.listedSince,
+        },
       ])
     );
-    const trucks = normalizeCameraTruckEntries(truckNumbers).map((entry) => ({
-      id: entry.id,
-      driver: entry.driver || previous.get(entry.id)?.driver || "",
-      comment: entry.comment || previous.get(entry.id)?.comment || "",
-      device: entry.device || previous.get(entry.id)?.device || "",
-      mark: entry.mark || previous.get(entry.id)?.mark || "",
-    }));
+    const today = todayListedDate();
+    const trucks = normalizeCameraTruckEntries(truckNumbers).map((entry) => {
+      const prior = previous.get(entry.id);
+      return {
+        id: entry.id,
+        driver: entry.driver || prior?.driver || "",
+        comment: entry.comment || prior?.comment || "",
+        device: entry.device || prior?.device || "",
+        mark: entry.mark || prior?.mark || "",
+        // Keep streak if the truck was already listed; otherwise start today.
+        listedSince: prior?.listedSince || entry.listedSince || today,
+      };
+    });
     saveTruckEntries(current, trucks);
     return { trucks };
   });

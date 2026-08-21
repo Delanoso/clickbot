@@ -1,6 +1,6 @@
 import { readDepotConfig } from "./depotConfig.js";
 import { readIncidentsConfig } from "./incidentsConfig.js";
-import { readCameraConfig } from "./cameraConfig.js";
+import { isCameraExcelYellow, readCameraConfig } from "./cameraConfig.js";
 import {
   getDepotSnapshot,
   getIncidentsSnapshot,
@@ -172,12 +172,13 @@ function appendSection(rows, trucks, snapshot, reasonKey, layout) {
   const live = liveById(snapshot);
   const label = reasonLabel(reasonKey);
   for (const truck of sortExportTrucks(trucks)) {
-    rows.push(
-      buildExportRow(truck, live.get(truck.id) || {}, {
+    rows.push({
+      cells: buildExportRow(truck, live.get(truck.id) || {}, {
         reasonText: label,
         layout,
-      })
-    );
+      }),
+      yellow: layout === "camera" && isCameraExcelYellow(truck),
+    });
   }
 }
 
@@ -222,6 +223,10 @@ export function collectTrackingExportRows(reason, configPath = "config/local.jso
   return rows;
 }
 
+function exportRowCells(row) {
+  return Array.isArray(row) ? row : row.cells;
+}
+
 export function buildTrackingExportCsv(reason, configPath = "config/local.json") {
   const raw = String(reason || "all").trim().toLowerCase();
   const normalized = raw === "all" ? "all" : normalizeReason(reason);
@@ -229,7 +234,7 @@ export function buildTrackingExportCsv(reason, configPath = "config/local.json")
   const rows = collectTrackingExportRows(reason, configPath);
   const lines = [
     header.map(csvCell).join(","),
-    ...rows.map((row) => row.map(csvCell).join(",")),
+    ...rows.map((row) => exportRowCells(row).map(csvCell).join(",")),
   ];
   // LF only. Excel on Windows treats CRLF as two row breaks in UTF-8 CSV,
   // which inserts a blank line between every truck.
@@ -248,8 +253,15 @@ export function buildTrackingExportExcelHtml(
   const head = header.map((label) => `<th>${htmlCell(label)}</th>`).join("");
   const body = rows
     .map((row) => {
-      const cells = row.map((value) => `<td>${htmlCell(value)}</td>`).join("");
-      return `<tr>${cells}</tr>`;
+      const cells = exportRowCells(row)
+        .map((value) => `<td>${htmlCell(value)}</td>`)
+        .join("");
+      // Truck Camera: yellow = on the list 2+ consecutive calendar days.
+      const attrs =
+        row && row.yellow
+          ? ' bgcolor="#FFE566" style="background:#FFE566"'
+          : "";
+      return `<tr${attrs}>${cells}</tr>`;
     })
     .join("");
 

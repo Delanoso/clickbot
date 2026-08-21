@@ -3,8 +3,12 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
   addCameraTruck,
+  consecutiveListedDays,
+  isCameraExcelYellow,
   listCameraTrucks,
+  removeCameraTruck,
   syncCameraTrucksFromStaleScan,
+  todayListedDate,
 } from "./cameraConfig.js";
 
 function assert(condition, message) {
@@ -39,6 +43,14 @@ const first = syncCameraTrucksFromStaleScan(
 assert(first.addedCount === 1, "sync adds a new truck");
 assert(first.removedCount === 0, "sync does not remove on first add");
 assert(listCameraTrucks(configPath).length === 1, "one truck on camera list");
+assert(
+  listCameraTrucks(configPath)[0].listedSince === todayListedDate(),
+  "new truck gets listedSince today"
+);
+assert(
+  !isCameraExcelYellow(listCameraTrucks(configPath)[0]),
+  "first day is not yellow"
+);
 
 addCameraTruck("H9999", { comment: "Manual follow-up", configPath });
 
@@ -111,6 +123,31 @@ assert(
 const fifth = syncCameraTrucksFromStaleScan([], { configPath });
 assert(fifth.removedCount === 1, "empty scan clears the camera list");
 assert(listCameraTrucks(configPath).length === 0, "no trucks left after empty scan");
+
+assert(consecutiveListedDays(todayListedDate()) === 1, "today = 1 day");
+assert(
+  consecutiveListedDays("2026-08-19", new Date("2026-08-21T12:00:00Z")) === 3,
+  "three consecutive calendar days"
+);
+assert(
+  isCameraExcelYellow({ listedSince: "2026-08-20" }, new Date("2026-08-21T12:00:00Z")),
+  "day 2+ is yellow"
+);
+assert(
+  !isCameraExcelYellow({ listedSince: "2026-08-21" }, new Date("2026-08-21T12:00:00Z")),
+  "day 1 stays white"
+);
+
+resetConfig();
+addCameraTruck("H4001", { comment: "first spell", configPath });
+const firstSpell = listCameraTrucks(configPath)[0].listedSince;
+assert(firstSpell === todayListedDate(), "first spell listedSince is today");
+removeCameraTruck("H4001", configPath);
+addCameraTruck("H4001", { comment: "second spell", configPath });
+assert(
+  listCameraTrucks(configPath)[0].listedSince === todayListedDate(),
+  "re-added truck resets listedSince to today"
+);
 
 rmSync(testDir, { recursive: true, force: true });
 console.log("cameraConfig.test.js: all assertions passed");
