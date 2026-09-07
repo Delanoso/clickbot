@@ -70,6 +70,17 @@ import {
   buildTrackingExportExcelHtml,
   trackingExportFilename,
 } from "./trackingExport.js";
+import {
+  authEnabled,
+  clearSessionCookie,
+  createSessionToken,
+  getSession,
+  isGuestApiAllowed,
+  isGuestPathAllowed,
+  resolveRoleFromPassword,
+  rewriteHtmlForGuest,
+  setSessionCookie,
+} from "./auth.js";
 
 loadEnvFile();
 
@@ -98,6 +109,26 @@ function sendJson(res, status, payload) {
   res.end(body);
 }
 
+function sendText(res, status, body, type = "text/plain; charset=utf-8") {
+  res.writeHead(status, {
+    "Content-Type": type,
+    "Cache-Control": "no-store",
+  });
+  res.end(body);
+}
+
+function sendNotFound(res) {
+  sendText(res, 404, "Not found");
+}
+
+function redirect(res, location) {
+  res.writeHead(302, {
+    Location: location,
+    "Cache-Control": "no-store",
+  });
+  res.end();
+}
+
 function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -115,8 +146,9 @@ function readBody(req) {
   });
 }
 
-function serveStatic(req, res, urlPath) {
+function resolveStaticRelative(urlPath) {
   let relative = urlPath === "/" ? "/index.html" : urlPath;
+  if (relative === "/login" || relative === "/login/") relative = "/login.html";
   if (relative === "/depot" || relative === "/depot/") relative = "/tracking-ppe.html";
   if (relative === "/tracking" || relative === "/tracking/") relative = "/tracking-overview.html";
   if (relative === "/tracking/ppe" || relative === "/tracking/ppe/") {
@@ -139,16 +171,55 @@ function serveStatic(req, res, urlPath) {
   ) {
     relative = "/tracking-incident.html";
   }
-  relative = relative.split("?")[0];
+  return relative.split("?")[0];
+}
+
+function serveStatic(req, res, urlPath, { role = "admin" } = {}) {
+  if (urlPath === "/logout" || urlPath === "/logout/") {
+    clearSessionCookie(res);
+    return redirect(res, "/login");
+  }
+
+  if (role === "guest" && (urlPath === "/" || urlPath === "/index.html")) {
+    return redirect(res, "/tracking");
+  }
+
+  if (role === "guest" && !isGuestPathAllowed(urlPath)) {
+    return sendNotFound(res);
+  }
+
+  const relative = resolveStaticRelative(urlPath);
+  if (role === "guest" && !isGuestPathAllowed(relative) && !isGuestPathAllowed(urlPath)) {
+    return sendNotFound(res);
+  }
+
   const filePath = join(publicDir, relative);
   if (!filePath.startsWith(publicDir) || !existsSync(filePath) || statSync(filePath).isDirectory()) {
-    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
-    res.end("Not found");
-    return;
+    return sendNotFound(res);
   }
+
   const type = MIME[extname(filePath)] || "application/octet-stream";
-  res.writeHead(200, { "Content-Type": type });
-  res.end(readFileSync(filePath));
+  let body = readFileSync(filePath);
+  if (role === "guest" && extname(filePath) === ".html") {
+    body = Buffer.from(rewriteHtmlForGuest(body.toString("utf8"), urlPath), "utf8");
+  }
+
+  // Help admins log out when auth is on — inject a small logout link if missing.
+  if (role === "admin" && authEnabled() && extname(filePath) === ".html") {
+    const html = body.toString("utf8");
+    if (html.includes('class="top-nav"') && !html.includes('href="/logout"')) {
+      body = Buffer.from(
+        html.replace(
+          /<\/nav>/i,
+          `<a class="nav-link" href="/logout">Log out</a></nav>`
+        ),
+        "utf8"
+      );
+    }
+  }
+
+  res.writeHead(200, { "Content-Type": type, "Cache-Control": "no-store" });
+  res.end(body);
 }
 
 function localAddresses() {
@@ -474,7 +545,38 @@ function sendTrackingExport(res, reason) {
   }
 }
 
-async function handleApi(req, res, url) {
+async function handleApi(req, res, url, { role = "admin" } = {}) {
+  if (req.method === "GET" && url.pathname === "/api/me") {
+    return sendJson(res, 200, {
+      authEnabled: authEnabled(),
+      role: role || null,
+      landing: role === "guest" ? "/tracking" : "/",
+    });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/login") {
+    const body = await readBody(req).catch(() => ({}));
+    const password = String(body.password || "");
+    const nextRole = resolveRoleFromPassword(password);
+    if (!nextRole) {
+      return sendJson(res, 401, { error: "Wrong password" });
+    }
+    setSessionCookie(res, createSessionToken(nextRole));
+    return sendJson(res, 200, {
+      role: nextRole,
+      redirect: nextRole === "guest" ? "/tracking" : "/",
+    });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/logout") {
+    clearSessionCookie(res);
+    return sendJson(res, 200, { ok: true });
+  }
+
+  if (role === "guest" && !isGuestApiAllowed(url.pathname)) {
+    return sendJson(res, 404, { error: "Not found" });
+  }
+
   if (req.method === "GET" && url.pathname === "/api/notes") {
     const category = url.searchParams.get("category");
     const q = url.searchParams.get("q") || "";
@@ -1086,11 +1188,42 @@ async function handleApi(req, res, url) {
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+    const session = getSession(req);
+    const role = session.role;
+
+    // Public auth endpoints + login assets when locked down.
+    const isPublicAuthApi =
+      url.pathname === "/api/auth/login" ||
+      url.pathname === "/api/auth/logout" ||
+      url.pathname === "/api/me" ||
+      url.pathname === "/api/health";
+    const isLoginPage =
+      url.pathname === "/login" ||
+      url.pathname === "/login/" ||
+      url.pathname === "/login.html" ||
+      url.pathname === "/login.js" ||
+      url.pathname.startsWith("/styles.css");
+
+    if (authEnabled() && !role) {
+      if (url.pathname.startsWith("/api/")) {
+        if (isPublicAuthApi) {
+          await handleApi(req, res, url, { role: null });
+          return;
+        }
+        return sendJson(res, 401, { error: "Sign in required" });
+      }
+      if (isLoginPage || url.pathname === "/logout" || url.pathname === "/logout/") {
+        serveStatic(req, res, url.pathname, { role: "admin" });
+        return;
+      }
+      return redirect(res, "/login");
+    }
+
     if (url.pathname.startsWith("/api/")) {
-      await handleApi(req, res, url);
+      await handleApi(req, res, url, { role: role || "admin" });
       return;
     }
-    serveStatic(req, res, url.pathname);
+    serveStatic(req, res, url.pathname, { role: role || "admin" });
   } catch (error) {
     sendJson(res, 500, { error: error.message || String(error) });
   }
@@ -1099,6 +1232,11 @@ const server = createServer(async (req, res) => {
 server.listen(PORT, HOST, () => {
   const addresses = localAddresses();
   console.log(`clickbot dashboard listening on http://${HOST}:${PORT}`);
+  if (authEnabled()) {
+    console.log("  Auth: enabled (ADMIN_PASSWORD / GUEST_PASSWORD)");
+  } else {
+    console.log("  Auth: open (set ADMIN_PASSWORD and GUEST_PASSWORD to lock down)");
+  }
   if (addresses.length) {
     for (const ip of addresses) {
       console.log(`  → http://${ip}:${PORT}`);

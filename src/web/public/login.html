@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sign in · clickbot</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css?v=20260907a" />
+  </head>
+  <body>
+    <div class="atmosphere" aria-hidden="true"></div>
+    <header class="hero hero-compact">
+      <p class="eyebrow">Private access</p>
+      <h1 class="brand brand-sm">clickbot</h1>
+      <p class="lede">Enter the password you were given to continue.</p>
+    </header>
+
+    <main class="depot-main">
+      <section class="truck-manager login-card" aria-label="Sign in">
+        <form id="loginForm" class="login-form">
+          <label for="password">Password</label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            autocomplete="current-password"
+            required
+            autofocus
+          />
+          <button type="submit" class="btn primary" id="loginBtn">Sign in</button>
+          <p id="loginError" class="form-note" role="alert"></p>
+        </form>
+      </section>
+    </main>
+
+    <script type="module" src="/login.js?v=20260907a"></script>
+  </body>
+</html>

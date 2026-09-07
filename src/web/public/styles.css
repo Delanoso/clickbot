@@ -1017,3 +1017,32 @@ a.btn.is-disabled {
     flex-direction: column;
   }
 }
+
+.login-card {
+  max-width: 28rem;
+  margin: 0 auto;
+}
+
+.login-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.login-form label {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.login-form input[type="password"] {
+  width: 100%;
+  border-radius: 0.7rem;
+  border: 1px solid var(--line);
+  background: rgba(5, 9, 14, 0.75);
+  color: var(--text);
+  font: inherit;
+  padding: 0.75rem 0.85rem;
+}
+
+.login-form .btn {
+  justify-self: start;
+}
