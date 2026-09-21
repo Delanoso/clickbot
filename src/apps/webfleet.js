@@ -389,7 +389,7 @@ async function resolveDriversSearchInput(page, selectors) {
   if (selectors.searchInput) {
     const locator = locate(page, selectors.searchInput);
     try {
-      await locator.waitFor({ state: "visible", timeout: 5000 });
+      await locator.waitFor({ state: "visible", timeout: 20000 });
       return locator;
     } catch {
       // continue
@@ -407,8 +407,17 @@ async function resolveDriversSearchInput(page, selectors) {
     }
   }
 
+  if (count === 0) {
+    // If the list/search UI isn't rendered yet, wait for *any* candidate
+    // to show up before selecting the "last" one.
+    await candidates.first().waitFor({ state: "attached", timeout: 30000 }).catch(() => {});
+  }
+
   const forced = candidates.last();
-  await forced.waitFor({ state: "attached", timeout: 10000 });
+  // Webfleet’s list/search inputs can appear with noticeable delay depending on
+  // map/list loading and network timing; make this resilient to avoid
+  // incidents-monitor crashing with a locator timeout.
+  await forced.waitFor({ state: "attached", timeout: 30000 }).catch(() => {});
   return forced;
 }
 
