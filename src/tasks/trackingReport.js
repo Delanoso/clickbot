@@ -14,15 +14,21 @@ import { readTaskStatus, runtimeDir, writeTaskStatus } from "../utils/taskStatus
  * 1) Run Driver Incident tracking for one cycle
  * 2) Run Truck Camera tracking for one cycle
  * 3) Build both Excel exports
- * 4) Email them and mark the report task done (dashboard notification)
+ * 4) Optionally email them (default on) and mark the report task done
  */
-export async function runTrackingReport(config, { configPath = "config/local.json" } = {}) {
+export async function runTrackingReport(
+  config,
+  { configPath = "config/local.json", email = true } = {}
+) {
   const startedAt = new Date().toISOString();
   writeTaskStatus("tracking-report", {
     state: "running",
-    message: "Starting incident + camera one-cycle report",
+    message: email
+      ? "Starting incident + camera one-cycle report"
+      : "Starting incident + camera one-cycle report (no email)",
     startedAt,
     emailSent: false,
+    emailEnabled: Boolean(email),
   });
 
   try {
@@ -80,6 +86,29 @@ export async function runTrackingReport(config, { configPath = "config/local.jso
       cameraPath,
     };
 
+    const finishedAt = new Date().toISOString();
+    console.log("[tracking-report] Saved:", incidentPath);
+    console.log("[tracking-report] Saved:", cameraPath);
+
+    if (!email) {
+      writeTaskStatus("tracking-report", {
+        state: "done",
+        message: `Report saved (no email) — ${incidentName}, ${cameraName}`,
+        startedAt,
+        finishedAt,
+        emailSent: false,
+        emailEnabled: false,
+        summary,
+        notification: {
+          title: "Tracking report ready",
+          body: `Saved without email: ${incidentName}, ${cameraName}`,
+          at: finishedAt,
+        },
+      });
+      console.log("[tracking-report] Done (no email).");
+      return { summary, mailResult: null, mailConfigured: getMailConfig().configured };
+    }
+
     writeTaskStatus("tracking-report", {
       state: "running",
       message: "Emailing Excel exports…",
@@ -123,26 +152,24 @@ export async function runTrackingReport(config, { configPath = "config/local.jso
       ],
     });
 
-    const finishedAt = new Date().toISOString();
     writeTaskStatus("tracking-report", {
       state: "done",
       message: `Report emailed to ${mailResult.to}`,
       startedAt,
-      finishedAt,
+      finishedAt: new Date().toISOString(),
       emailSent: true,
+      emailEnabled: true,
       emailTo: mailResult.to,
       messageId: mailResult.messageId,
       summary,
       notification: {
         title: "Tracking report ready",
         body: `Excel files emailed to ${mailResult.to}`,
-        at: finishedAt,
+        at: new Date().toISOString(),
       },
     });
 
     console.log("[tracking-report] Email sent:", mailResult.to, mailResult.messageId);
-    console.log("[tracking-report] Saved:", incidentPath);
-    console.log("[tracking-report] Saved:", cameraPath);
     console.log("[tracking-report] Done.");
     return { summary, mailResult, mailConfigured: mailCfg.configured };
   } catch (error) {

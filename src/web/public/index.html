@@ -42,14 +42,15 @@
             <span class="status-dot" data-role="dot"></span>
           </div>
           <p class="task-copy">
-            Run one Incident cycle + one Truck Camera cycle, then email both Excel files.
+            Run one Incident cycle + one Truck Camera cycle. Email is optional — Tracking pages still run on their own with no mail.
           </p>
           <dl class="task-stats">
             <div><dt>State</dt><dd data-role="state">idle</dd></div>
             <div><dt>Last</dt><dd data-role="detail">—</dd></div>
           </dl>
           <div class="task-actions">
-            <button type="button" class="btn primary" data-action="start">Run report</button>
+            <button type="button" class="btn primary" data-action="start">Run + email</button>
+            <button type="button" class="btn" data-action="start-no-email">Run only</button>
             <button type="button" class="btn" data-action="stop">Stop</button>
           </div>
         </article>
@@ -185,6 +186,6 @@
       </section>
     </main>
 
-    <script type="module" src="/app.js?v=20261027a"></script>
+    <script type="module" src="/app.js?v=20261027b"></script>
   </body>
 </html>

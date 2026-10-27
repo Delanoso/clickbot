@@ -1170,8 +1170,13 @@ async function handleApi(req, res, url, { role = "admin" } = {}) {
 
     if (req.method === "POST" && action === "start") {
       const body = await readBody(req).catch(() => ({}));
+      const extraArgs = [];
+      if (taskId === "tracking-report" && body.email === false) {
+        extraArgs.push("--no-email");
+      }
       const task = startTask(taskId, {
         configPath: body.configPath || CONFIG_PATH,
+        extraArgs,
       });
       return sendJson(res, 200, { task });
     }

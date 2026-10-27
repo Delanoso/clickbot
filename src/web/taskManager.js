@@ -91,7 +91,10 @@ export function getTask(taskId) {
   return listTasks().find((task) => task.id === taskId) || null;
 }
 
-export function startTask(taskId, { configPath = "config/local.json" } = {}) {
+export function startTask(
+  taskId,
+  { configPath = "config/local.json", extraArgs = [] } = {}
+) {
   const meta = TASKS.find((task) => task.id === taskId);
   if (!meta) throw new Error(`Unknown task: ${taskId}`);
 
@@ -116,7 +119,7 @@ export function startTask(taskId, { configPath = "config/local.json" } = {}) {
   logStreams.set(taskId, out);
   const child = spawn(
     process.execPath,
-    ["src/index.js", meta.cli, "--config", configPath],
+    ["src/index.js", meta.cli, "--config", configPath, ...extraArgs],
     {
       cwd: root,
       env: { ...process.env },

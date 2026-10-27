@@ -13,7 +13,12 @@ import { runTrackingReport } from "./tasks/trackingReport.js";
 loadEnvFile();
 
 function parseArgs(argv) {
-  const args = { task: "allocate-drivers", configPath: null, once: false };
+  const args = {
+    task: "allocate-drivers",
+    configPath: null,
+    once: false,
+    email: true,
+  };
   const rest = [...argv];
 
   while (rest.length > 0) {
@@ -28,6 +33,14 @@ function parseArgs(argv) {
     }
     if (token === "--once") {
       args.once = true;
+      continue;
+    }
+    if (token === "--no-email") {
+      args.email = false;
+      continue;
+    }
+    if (token === "--email") {
+      args.email = true;
       continue;
     }
     if (!token.startsWith("-")) {
@@ -80,6 +93,7 @@ async function main() {
     case "tracking-report":
       await runTrackingReport(config, {
         configPath: args.configPath || process.env.CLICKBOT_CONFIG || "config/local.json",
+        email: args.email,
       });
       break;
     default:

@@ -21,18 +21,27 @@ document.querySelectorAll(".task-panel[data-task]").forEach((panel) => {
   panel.querySelector('[data-action="start"]')?.addEventListener("click", () => {
     controlTask(panel.dataset.task, "start");
   });
+  panel
+    .querySelector('[data-action="start-no-email"]')
+    ?.addEventListener("click", () => {
+      controlTask(panel.dataset.task, "start", { email: false });
+    });
   panel.querySelector('[data-action="stop"]')?.addEventListener("click", () => {
     controlTask(panel.dataset.task, "stop");
   });
 });
 
-async function controlTask(taskId, action) {
+async function controlTask(taskId, action, body = {}) {
   const panel = document.querySelector(`[data-task="${taskId}"]`);
   panel?.querySelectorAll("button").forEach((btn) => {
     btn.disabled = true;
   });
   try {
-    const res = await fetch(`/api/tasks/${taskId}/${action}`, { method: "POST" });
+    const res = await fetch(`/api/tasks/${taskId}/${action}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Request failed");
     selectedLogTask = taskId;
