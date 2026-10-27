@@ -137,13 +137,28 @@ export async function ensureWebfleetDepotMonitor(page, appConfig, monitorConfig 
     appConfig.monitor?.workUrl ||
     "https://live-wf.webfleet.com/web/map";
 
-  if (!page.url().startsWith(workUrl)) {
-    await page.goto(workUrl, { waitUntil: "domcontentloaded" });
-  }
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    if (!page.url().includes("/web/map")) {
+      await page.goto(workUrl, { waitUntil: "domcontentloaded", timeout: 90000 });
+    }
+    await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {});
+    await sleep(1000 + attempt * 500);
 
-  const search = await resolveMonitorSearchInput(page, appConfig, monitorConfig);
-  await search.waitFor({ state: "visible", timeout: 60000 });
-  await sleep(800);
+    try {
+      const search = await resolveMonitorSearchInput(page, appConfig, monitorConfig, {
+        waitMs: 45000,
+      });
+      await search.waitFor({ state: "visible", timeout: 15000 });
+      await sleep(800);
+      return;
+    } catch (error) {
+      console.log(
+        `[fleet] Map search not ready (attempt ${attempt}/3): ${error.message || error}`
+      );
+      if (attempt >= 3) throw error;
+      await page.goto(workUrl, { waitUntil: "domcontentloaded", timeout: 90000 }).catch(() => {});
+    }
+  }
 }
 
 /**
@@ -407,53 +422,61 @@ async function resolveDriversSearchInput(page, selectors) {
     }
   }
 
-  const forced = candidates.last();
-  await forced.waitFor({ state: "attached", timeout: 10000 });
-  return forced;
+  throw new Error("Could not find Webfleet Drivers search input");
 }
 
-async function resolveMonitorSearchInput(page, appConfig, monitorConfig) {
+async function resolveMonitorSearchInput(
+  page,
+  appConfig,
+  monitorConfig,
+  { waitMs = 20000 } = {}
+) {
   const preferredCss = "input.t3sel-object-filter-bar-item-search";
-  const preferred = page.locator(preferredCss).first();
-  if (await preferred.isVisible().catch(() => false)) {
-    return preferred;
-  }
+  const deadline = Date.now() + Math.max(5000, waitMs);
 
-  const selector =
-    monitorConfig.selectors?.searchInput ||
-    appConfig.monitor?.selectors?.searchInput ||
-    appConfig.selectors?.searchInput;
+  while (Date.now() < deadline) {
+    const preferred = page.locator(preferredCss).first();
+    if (await preferred.isVisible().catch(() => false)) {
+      return preferred;
+    }
 
-  if (selector) {
-    // Prefer a visible match when CSS can hit multiple Search inputs on the map.
-    if (typeof selector === "string" || selector.css || selector.placeholder) {
-      const candidates =
-        typeof selector === "string"
-          ? page.locator(selector)
-          : selector.css
-            ? page.locator(selector.css)
-            : page.getByPlaceholder(selector.placeholder, {
-                exact: Boolean(selector.exact),
-              });
-      const count = await candidates.count();
-      for (let i = 0; i < count; i += 1) {
-        const candidate = candidates.nth(i);
-        if (await candidate.isVisible().catch(() => false)) {
-          return candidate;
+    const selector =
+      monitorConfig.selectors?.searchInput ||
+      appConfig.monitor?.selectors?.searchInput ||
+      appConfig.selectors?.searchInput;
+
+    if (selector) {
+      // Prefer a visible match when CSS can hit multiple Search inputs on the map.
+      if (typeof selector === "string" || selector.css || selector.placeholder) {
+        const candidates =
+          typeof selector === "string"
+            ? page.locator(selector)
+            : selector.css
+              ? page.locator(selector.css)
+              : page.getByPlaceholder(selector.placeholder, {
+                  exact: Boolean(selector.exact),
+                });
+        const count = await candidates.count();
+        for (let i = 0; i < count; i += 1) {
+          const candidate = candidates.nth(i);
+          if (await candidate.isVisible().catch(() => false)) {
+            return candidate;
+          }
         }
+      }
+
+      const locator = locate(page, selector);
+      if (await locator.isVisible().catch(() => false)) {
+        return locator;
       }
     }
 
-    const locator = locate(page, selector);
-    try {
-      await locator.waitFor({ state: "visible", timeout: 5000 });
-      return locator;
-    } catch {
-      // continue to generic fallback
-    }
+    await sleep(800);
   }
 
-  return resolveDriversSearchInput(page, appConfig.selectors || {});
+  throw new Error(
+    `Webfleet map search input not visible after ${waitMs}ms (url=${page.url()})`
+  );
 }
 
 async function clickTruckResultByText(page, truckNumber) {
