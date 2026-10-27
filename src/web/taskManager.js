@@ -56,6 +56,12 @@ export const TASKS = [
     summary: "Scan Last communicated; add trucks older than 2 days to Truck Camera with device number.",
     cli: "stale-cameras",
   },
+  {
+    id: "tracking-report",
+    name: "Tracking Report",
+    summary: "One cycle of Incident + Truck Camera, then email both Excel exports.",
+    cli: "tracking-report",
+  },
 ];
 
 const processes = new Map();

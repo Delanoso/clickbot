@@ -8,11 +8,12 @@ import { runIncidentsMonitor } from "./tasks/incidentsMonitor.js";
 import { runCameraMonitor } from "./tasks/cameraMonitor.js";
 import { runWakeTrucks } from "./tasks/wakeTrucks.js";
 import { runStaleCameras } from "./tasks/staleCameras.js";
+import { runTrackingReport } from "./tasks/trackingReport.js";
 
 loadEnvFile();
 
 function parseArgs(argv) {
-  const args = { task: "allocate-drivers", configPath: null };
+  const args = { task: "allocate-drivers", configPath: null, once: false };
   const rest = [...argv];
 
   while (rest.length > 0) {
@@ -23,6 +24,10 @@ function parseArgs(argv) {
     }
     if (token.startsWith("--config=")) {
       args.configPath = token.slice("--config=".length);
+      continue;
+    }
+    if (token === "--once") {
+      args.once = true;
       continue;
     }
     if (!token.startsWith("-")) {
@@ -40,7 +45,8 @@ async function main() {
     args.task === "fyi-notify" ||
     args.task === "due-for-coaching" ||
     args.task === "wake-trucks" ||
-    args.task === "stale-cameras";
+    args.task === "stale-cameras" ||
+    args.task === "tracking-report";
   const config = loadConfig({
     configPath: args.configPath,
     relaxValidation,
@@ -60,10 +66,10 @@ async function main() {
       await runDepotMonitor(config);
       break;
     case "incidents-monitor":
-      await runIncidentsMonitor(config);
+      await runIncidentsMonitor(config, { once: args.once });
       break;
     case "camera-monitor":
-      await runCameraMonitor(config);
+      await runCameraMonitor(config, { once: args.once });
       break;
     case "wake-trucks":
       await runWakeTrucks(config);
@@ -71,10 +77,15 @@ async function main() {
     case "stale-cameras":
       await runStaleCameras(config);
       break;
+    case "tracking-report":
+      await runTrackingReport(config, {
+        configPath: args.configPath || process.env.CLICKBOT_CONFIG || "config/local.json",
+      });
+      break;
     default:
       console.error(`Unknown task: ${args.task}`);
       console.error(
-        "Available tasks: allocate-drivers, fyi-notify, due-for-coaching, depot-monitor, incidents-monitor, camera-monitor, wake-trucks, stale-cameras"
+        "Available tasks: allocate-drivers, fyi-notify, due-for-coaching, depot-monitor, incidents-monitor, camera-monitor, wake-trucks, stale-cameras, tracking-report"
       );
       process.exitCode = 1;
   }

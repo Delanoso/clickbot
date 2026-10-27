@@ -8,7 +8,7 @@ import { normalizeMonitorText } from "../utils/depotMonitor.js";
 import { writeTaskStatus } from "../utils/taskStatus.js";
 import { cameraTruckIds } from "../web/cameraConfig.js";
 
-export async function runCameraMonitor(config) {
+export async function runCameraMonitor(config, { once = false } = {}) {
   const section = config.cameraWatch || {};
   // Only reuse depot area terms / Webfleet map selectors for location matching —
   // never the PPE/Incident truck lists (cameraWatch.trucks is independent).
@@ -19,6 +19,7 @@ export async function runCameraMonitor(config) {
   }
 
   const pollIntervalMs = section.pollIntervalMs ?? 60000;
+  const maxCycles = once ? 1 : Number(section.maxCycles || 0);
   const monitor = {
     workUrl:
       section.workUrl ||
@@ -46,18 +47,23 @@ export async function runCameraMonitor(config) {
   });
 
   const { browser, page } = await openWebfleetOnly(config);
+  let finishedOk = false;
 
   try {
     await ensureWebfleetDepotMonitor(page, config.apps.fleet, monitor);
 
     console.log("Webfleet camera monitor open.");
     console.log(`Watching ${trucks.length} truck(s) for depot + Johannesburg (camera).`);
-    console.log(`Polling every ${pollIntervalMs} ms.`);
-    console.log("Press Ctrl+C to stop.\n");
+    if (maxCycles > 0) {
+      console.log(`Running ${maxCycles} cycle(s), then stopping.`);
+    } else {
+      console.log(`Polling every ${pollIntervalMs} ms.`);
+      console.log("Press Ctrl+C to stop.\n");
+    }
 
     writeTaskStatus("camera-monitor", {
       state: "running",
-      message: "Polling Webfleet map",
+      message: maxCycles > 0 ? `Running ${maxCycles} cycle(s)` : "Polling Webfleet map",
       watchedCount: trucks.length,
       pollIntervalMs,
       trucks: [],
@@ -65,6 +71,7 @@ export async function runCameraMonitor(config) {
       inJohannesburg: [],
       cycle: 0,
       alerts,
+      once: maxCycles === 1,
     });
 
     let cycle = 0;
@@ -153,21 +160,45 @@ export async function runCameraMonitor(config) {
         cycleComplete: true,
       });
 
+      if (maxCycles > 0 && cycle >= maxCycles) {
+        const rows = snapshotTrucks(state, trucks);
+        writeTaskStatus("camera-monitor", {
+          state: "done",
+          message: `Completed ${cycle} cycle(s)`,
+          watchedCount: trucks.length,
+          checkedCount: rows.filter((row) => row.checkedAt).length,
+          pollIntervalMs,
+          cycle,
+          cycleComplete: true,
+          inDepotCount: rows.filter((row) => row.inDepot).length,
+          inJohannesburgCount: rows.filter((row) => row.inJohannesburg).length,
+          trucks: rows,
+          inDepot: rows.filter((row) => row.inDepot),
+          inJohannesburg: rows.filter((row) => row.inJohannesburg),
+          alerts,
+          once: maxCycles === 1,
+        });
+        finishedOk = true;
+        break;
+      }
+
       console.log("");
       await sleep(pollIntervalMs);
     }
   } finally {
-    const rows = snapshotTrucks(state, trucks);
-    writeTaskStatus("camera-monitor", {
-      state: "stopped",
-      message: "Monitor stopped",
-      watchedCount: trucks.length,
-      trucks: rows,
-      inDepot: rows.filter((row) => row.inDepot),
-      inJohannesburg: rows.filter((row) => row.inJohannesburg),
-      cycle: 0,
-      alerts,
-    });
+    if (!finishedOk) {
+      const rows = snapshotTrucks(state, trucks);
+      writeTaskStatus("camera-monitor", {
+        state: "stopped",
+        message: "Monitor stopped",
+        watchedCount: trucks.length,
+        trucks: rows,
+        inDepot: rows.filter((row) => row.inDepot),
+        inJohannesburg: rows.filter((row) => row.inJohannesburg),
+        cycle: 0,
+        alerts,
+      });
+    }
     await browser.close();
   }
 }
