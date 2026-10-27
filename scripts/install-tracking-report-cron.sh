@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Install a daily cron job that runs the tracking report (incident + camera one cycle → email).
-# Default: 07:00 Africa/Johannesburg.
+# Install a Mon–Fri cron job that runs the tracking report (incident + camera one cycle → email).
+# Default: 07:00 Africa/Johannesburg, Monday–Friday only.
 #
 # Usage on the VPS:
 #   cd /opt/clickbot-ops && ./scripts/install-tracking-report-cron.sh
 # Optional:
-#   CRON_EXPR='0 7 * * *' ./scripts/install-tracking-report-cron.sh
+#   CRON_EXPR='0 7 * * 1-5' ./scripts/install-tracking-report-cron.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-CRON_EXPR="${CRON_EXPR:-0 7 * * *}"
+CRON_EXPR="${CRON_EXPR:-0 7 * * 1-5}"
 LOG_FILE="${LOG_FILE:-/var/log/clickbot-tracking-report.log}"
 MARKER="# clickbot-tracking-report"
 

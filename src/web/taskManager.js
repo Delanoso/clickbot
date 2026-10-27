@@ -62,6 +62,12 @@ export const TASKS = [
     summary: "One cycle of Incident + Truck Camera, then email both Excel exports.",
     cli: "tracking-report",
   },
+  {
+    id: "incidents-depot-alert",
+    name: "Incident Depot Alert",
+    summary: "One Incident cycle; email when trucks on that list are in depot.",
+    cli: "incidents-depot-alert",
+  },
 ];
 
 const processes = new Map();

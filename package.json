@@ -15,6 +15,7 @@
     "wake": "node src/index.js wake-trucks",
     "stale-cameras": "node src/index.js stale-cameras",
     "tracking-report": "node src/index.js tracking-report",
+    "incidents-depot-alert": "node src/index.js incidents-depot-alert",
     "dashboard": "node src/web/server.js",
     "explore": "node src/explore.js",
     "demo:server": "node demo/server.js",

@@ -9,6 +9,7 @@ import { runCameraMonitor } from "./tasks/cameraMonitor.js";
 import { runWakeTrucks } from "./tasks/wakeTrucks.js";
 import { runStaleCameras } from "./tasks/staleCameras.js";
 import { runTrackingReport } from "./tasks/trackingReport.js";
+import { runIncidentsDepotAlert } from "./tasks/incidentsDepotAlert.js";
 
 loadEnvFile();
 
@@ -59,7 +60,8 @@ async function main() {
     args.task === "due-for-coaching" ||
     args.task === "wake-trucks" ||
     args.task === "stale-cameras" ||
-    args.task === "tracking-report";
+    args.task === "tracking-report" ||
+    args.task === "incidents-depot-alert";
   const config = loadConfig({
     configPath: args.configPath,
     relaxValidation,
@@ -96,10 +98,13 @@ async function main() {
         email: args.email,
       });
       break;
+    case "incidents-depot-alert":
+      await runIncidentsDepotAlert(config);
+      break;
     default:
       console.error(`Unknown task: ${args.task}`);
       console.error(
-        "Available tasks: allocate-drivers, fyi-notify, due-for-coaching, depot-monitor, incidents-monitor, camera-monitor, wake-trucks, stale-cameras, tracking-report"
+        "Available tasks: allocate-drivers, fyi-notify, due-for-coaching, depot-monitor, incidents-monitor, camera-monitor, wake-trucks, stale-cameras, tracking-report, incidents-depot-alert"
       );
       process.exitCode = 1;
   }
